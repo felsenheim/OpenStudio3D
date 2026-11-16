@@ -44,7 +44,7 @@
     // ---- settings (URL options in brackets) ---------------------------------
     const params = new URLSearchParams(location.search);
     const num = (k, d) => (params.has(k) ? +params.get(k) : d);
-    const TARGET_MM = 190;                 // width of target.png on paper (184 mm circle + 3 mm margin each side)
+    const TARGET_MM = 138;                 // width of target.png on paper (120 mm artwork + mode ring to 132 mm + 3 mm margin each side)
     const FILTER_MIN_CF = num('cf', 0.0005);   // MindAR one-euro filter: lower = calmer when still [?cf=]
     const FILTER_BETA = num('beta', 10);       // higher = less lag when moving [?beta=]
     // Our own pose smoothing on top of MindAR (same idea as the sensor station's SMOOTH):

@@ -1,6 +1,6 @@
 # OpenStudio3D: AR station, all values
 
-State as of 16 Nov 2026 (defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
+State as of 16 Nov 2026 (new 120 mm target from `ar/design.pdf`; defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
 
 ## Links
 | What | Where |
@@ -13,6 +13,7 @@ State as of 16 Nov 2026 (defaults tuned on the iPhone: dead zone 3 mm / 1.5°, s
 ## Files
 ```
 ar/index.html              AR page (MindAR + shared viewer)
+ar/design.pdf              the circular artwork (source of the target; replace it to change the design)
 ar/card.pdf                A4 card to print
 ar/card_preview.png        low-res preview of the card
 ar/target.png              tracking image (input for the MindAR compiler)
@@ -20,7 +21,7 @@ ar/target.mind             compiled tracking data (loaded by the page)
 shared/three-compat.js     three 0.187 + sRGBEncoding, for MindAR only
 shared/viewer.js           loadTangibleModel(), modeForYaw(), MODES (shared with the sensor station)
 models/head.glb            the model
-tools/make_card.py         builds card.pdf, card_preview.png, target.png from models/head.glb
+tools/make_card.py         builds card.pdf, card_preview.png, target.png from ar/design.pdf
 tools/compile-target.html  compiles ar/target.png into target.mind in the browser
 ```
 
@@ -52,11 +53,11 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 |---|---|
 | Paper | A4 (210 × 297 mm), portrait, **matte** |
 | Print scale | **100 % / actual size** (not "fit to page"). Black and white is fine: tracking runs in greyscale |
-| Check | Circle diameter = **184 mm** |
-| Circle centre | horizontally centred, **112 mm** from the top edge |
-| Circle content | the model's base-colour texture (from the GLB), rotated 17°, CLAHE contrast boost (clip 3.0, 12 × 12 tiles), brightness × 1.15, sharpness × 1.8; 0.6 mm black outline |
-| White centre | **60 mm** diameter (radius 30 mm): cross where the model stands, "front" arrow and label pointing to the bottom edge |
-| Mode ring | radius 30–35 mm, three arcs: FLAT steel blue `#2f4a6b` (300°–60°, at the front), SMOOTH grey `#969696` (60°–180°, left), PBR copper `#b06c34` (180°–300°, right) |
+| Check | Artwork circle diameter = **120 mm** (with the mode ring: 132 mm) |
+| Circle centre | horizontally centred, **118 mm** from the top edge |
+| Circle content | your artwork from `ar/design.pdf` (shapes, letters, outline squares and circles), found automatically on the PDF page and scaled to 120 mm, unchanged otherwise; 0.5 mm black outline |
+| Front marker | black triangle + "front" just below the mode ring at 6 o'clock (outside the tracking image) |
+| Mode ring | **outside** the artwork, radius 61.5–66 mm, three arcs: FLAT steel blue `#2f4a6b` (300°–60°, at the front), SMOOTH grey `#969696` (60°–180°, left), PBR copper `#b06c34` (180°–300°, right) |
 | QR code | 35 × 35 mm, bottom-right corner, 15 mm from the right and bottom edges, error correction M, links to `https://felsenheim.github.io/OpenStudio3D/ar/` |
 | Text | title "OpenStudio3D · AR" top left; two instruction lines + "Print at 100 % on matte paper." bottom left; font Inter |
 | Resolution | generated at 300 dpi |
@@ -65,8 +66,8 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 | Item | Value |
 |---|---|
 | Image | `ar/target.png`, **1024 × 1024 px**, square crop around the circle |
-| Size on paper | **190 mm** wide (184 mm circle + 3 mm margin on each side) → 5.39 px/mm |
-| Compiled | `ar/target.mind`, 740,558 bytes, about 400 matching feature points per scale (11 scales), 37 / 29 tracking points |
+| Size on paper | **138 mm** wide (132 mm incl. mode ring + 3 mm margin on each side) → 7.42 px/mm. `TARGET_MM = 138` in `ar/index.html` |
+| Compiled | `ar/target.mind`, 685,481 bytes, matching points 3,290 over 11 scales, 29 / 21 tracking points |
 | Compiler | MindAR 1.2.5 `Compiler` (`tools/compile-target.html`, same as the online compiler) |
 
 ## MindAR settings
@@ -96,10 +97,10 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 ## Placement of the model
 | Item | Value |
 |---|---|
-| Anchor space | origin = card (circle) centre, 1 unit = target width = 190 mm, x right, y toward the top of the card, z up out of the paper |
+| Anchor space | origin = card (circle) centre, 1 unit = target width = 138 mm, x right, y toward the top of the card, z up out of the paper |
 | Orientation | model group rotated **Rx(+90°)**: model up (y) → card up (z), model front (+z) → card −y = toward the "front" arrow |
 | Base | model shifted so the bottom of its bounding box sits on the card plane |
-| Height | **150 mm** (scale = (150 / 190) / model height) |
+| Height | **150 mm** (scale = (150 / 138) / model height). On the 120 mm card the model's base covers almost the whole card on screen; this doesn't affect tracking (it uses the camera image) |
 | Height override | `?height=` in mm, e.g. `?height=90` |
 | Model orientation | fixed (yaw 0, pitch 0); the viewer walks around it |
 | `frontYawDeg` | 0 (front of the test model not yet calibrated) |
@@ -164,10 +165,12 @@ Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smo
 
 ## Rebuilding the card and target
 1. `pip install pillow numpy opencv-python qrcode`
-2. From the repo root: `python3 tools/make_card.py` (optional: path to another GLB). Writes `ar/card.pdf`, `ar/card_preview.png`, `ar/target.png`.
-3. Serve the repo locally (`npx serve` or `python3 -m http.server`) and open `tools/compile-target.html` → Compile → save the downloaded `target.mind` into `ar/`.
-4. Commit all four files. Reprint the card: an old printout won't match a new `target.mind`.
+2. Replace `ar/design.pdf` with the new artwork (one circle anywhere on the page; size doesn't matter, it's scaled to 120 mm). Needs poppler (`pdftoppm`).
+3. From the repo root: `python3 tools/make_card.py`. Writes `ar/card.pdf`, `ar/card_preview.png`, `ar/target.png` and prints `TARGET_MM` (138 unless the sizes in the script change; then update `ar/index.html`).
+4. Serve the repo locally (`npx serve` or `python3 -m http.server`) and open `tools/compile-target.html` → Compile → save the downloaded `target.mind` into `ar/`.
+5. Commit everything. Reprint the card: an old printout won't match a new `target.mind`.
 
 ## Test status
-- Headless Chrome with a simulated camera orbiting the printed card at 50° elevation: card found from all sides, elevation read back as ~50°, modes switch at 60° / 180° / 300°, model stands on the card, camera-denied message works. About 10 fps with software rendering (expect much more on a phone).
-- **Still to do:** test on a real iPhone with the printed card (phase 3 "done when").
+- 120 mm card (current), headless Chrome, simulated phone camera with noise and blur, 35° above the table: card found from all sides, modes switch correctly, model stands on the card. Raw pose shake about 1 mm at 30–40 cm (absorbed by the 3 mm dead zone); **not found from 60 cm** in poor image conditions. Use the station from about 25–45 cm.
+- Comparison (same test, 60 cm): the earlier 184 mm scan-texture card shook 1.4 mm; smaller targets need the camera closer.
+- Tested on the iPhone with the previous 184 mm card: smoothing defaults confirmed. **Still to do:** iPhone test with the new 120 mm card.

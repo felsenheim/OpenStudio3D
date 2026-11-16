@@ -9,9 +9,10 @@ shared/viewer.js      shared viewer: load GLB, center/scale, RoomEnvironment, 3 
 shared/mouse-input.js mouse/touch input adapter (development)
 sensor/index.html     sensor station (mouse for now; game controller in phase 2)
 ar/index.html         AR station (MindAR image tracking)
+ar/design.pdf         circular artwork (source of the target)
 ar/card.pdf           printable A4 card; ar/target.png + ar/target.mind = tracking image
 shared/three-compat.js lets MindAR 1.2.5 load with three 0.187
-tools/                make_card.py (card + target from the GLB), compile-target.html (target.mind)
+tools/                make_card.py (card + target from ar/design.pdf), compile-target.html (target.mind)
 models/head.glb       the model
 ```
 No build step. three.js loads from jsDelivr via an import map.
@@ -35,13 +36,13 @@ Local test: `npx serve` (or `python3 -m http.server`) in this folder, then open 
 URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` loads another model.
 
 ## AR station
-1. Print `ar/card.pdf` at 100 % (actual size) on matte paper; the circle must measure 184 mm.
+1. Print `ar/card.pdf` at 100 % (actual size) on matte paper; the artwork circle must measure 120 mm. Use the station from about 25–45 cm.
 2. Scan the QR code (it opens `/ar/`), allow the camera, point at the circle.
 3. Walk around the card: the side facing you picks the mode (front arrow = flat, your left = smooth, your right = PBR).
 
 URL options: `?debug` (azimuth, elevation, mode, fps), `?height=150` (model height on the card in mm), `?cf=0.0005&beta=10` (MindAR filter: lower `cf` = calmer when still, higher `beta` = less lag when moving), `?smooth=5&dpos=3&drot=1.5` (own pose smoothing: easing speed, dead zone in mm and degrees), `?hyst=3` (degrees past a mode border before switching).
 
-After changing the card: `python3 tools/make_card.py`, then open `tools/compile-target.html` (local server) to get a new `ar/target.mind`.
+After changing the artwork (replace `ar/design.pdf`): `python3 tools/make_card.py`, then open `tools/compile-target.html` (local server) to get a new `ar/target.mind`.
 
 ## Shading modes (by yaw, hard switch at 60° / 180° / 300°)
 | Yaw | Mode |
