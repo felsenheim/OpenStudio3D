@@ -47,7 +47,7 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 ```
 - MindAR 1.2.5 imports `sRGBEncoding`, which three removed in r162. Without the shim the whole MindAR module fails to load ("does not provide an export named 'sRGBEncoding'").
 - `shared/three-compat.js` = `export * from 'three'; export const sRGBEncoding = 3001;`. Only MindAR gets it (via `scopes`); everything else uses plain three.
-- Cache-busting: `viewer.js?v=9`, `three-compat.js?v=1`. Raise the number after changing the file.
+- Cache-busting: `viewer.js?v=10`, `three-compat.js?v=1`. Raise the number after changing the file.
 
 ## Card (print)
 | Item | Value |
