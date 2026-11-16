@@ -31,6 +31,7 @@ export async function loadTangibleModel(url, {
   flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
   flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
   flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
+  smoothColor = 0x7a7a7a, // smooth mode: mid grey so it stands out against a light background
   onProgress,
 } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
@@ -63,7 +64,7 @@ export async function loadTangibleModel(url, {
     });
     flatMats.push(flat);
     const smoothMat = new THREE.MeshStandardMaterial({
-      color: 0xc8c8c8, roughness: 0.55, metalness: 0, side: pbr.side,
+      color: smoothColor, roughness: 0.55, metalness: 0, side: pbr.side,
       aoMap: pbr.aoMap || null, aoMapIntensity: pbr.aoMapIntensity ?? 1,
       normalMap: pbr.normalMap || null,
     });
@@ -103,6 +104,7 @@ export async function loadTangibleModel(url, {
     flatKeyLight,
     setFlatColor(c) { for (const m of flatMats) m.color.set(c); },
     getFlatColor() { return '#' + flatMats[0].color.getHexString(); },
+    setSmoothColor(c) { for (const m of meshes) m.materials[1].color.set(c); },
     setFlatEnv(v) { for (const m of flatMats) m.envMapIntensity = v; },
     getFlatEnv() { return flatMats[0].envMapIntensity; },
     smooth,
@@ -139,14 +141,23 @@ export async function loadTangibleModel(url, {
 }
 
 // Full-window viewer with a fixed camera (no zoom, no pan).
-export function createScreenViewer(container, model, { background = 0x2a2a2a, fovDeg = 30, margin = 1.08 } = {}) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+// background: { center, edge, size } -> circular falloff from the centre colour to the edge colour.
+//   size = where the edge colour is reached, in % of the distance from the centre to the farthest corner.
+export function createScreenViewer(container, model, {
+  background = { center: '#ffffff', edge: '#b3b3b3', size: 100 },
+  fovDeg = 30, margin = 1.08,
+} = {}) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setClearColor(0x000000, 0);   // transparent canvas: the CSS gradient shows through
+  const setBackground = ({ center, edge, size = 100 }) => {
+    container.style.background = `radial-gradient(circle farthest-corner at 50% 50%, ${center} 0%, ${edge} ${size}%)`;
+  };
+  setBackground(background);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.NeutralToneMapping;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(background);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.add(model.root);
@@ -181,7 +192,7 @@ export function createScreenViewer(container, model, { background = 0x2a2a2a, fo
     renderer.render(scene, camera);
   });
 
-  return { renderer, scene, camera, onFrame: (fn) => listeners.push(fn) };
+  return { renderer, scene, camera, setBackground, onFrame: (fn) => listeners.push(fn) };
 }
 
 // Small debug panel, toggled with the "D" key.

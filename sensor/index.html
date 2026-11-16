@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tangible Interface · Sensor station</title>
   <style>
-    html, body { margin: 0; height: 100%; background: #2a2a2a; overflow: hidden; }
+    html, body { margin: 0; height: 100%; background: #b3b3b3; overflow: hidden; }
     #view { position: fixed; inset: 0; }
     #status { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
       color: #ccc; font: 15px system-ui, sans-serif; background: rgba(0,0,0,.5);
@@ -37,7 +37,10 @@
         smooth: 12,
         onProgress: (e) => { if (e.total) status.textContent = `Loading model… ${Math.round(e.loaded / e.total * 100)}%`; },
       });
-      const viewer = createScreenViewer(document.getElementById('view'), model);
+      const viewer = createScreenViewer(document.getElementById('view'), model, {
+        // Circular falloff: white in the centre, 30% grey (#b3b3b3) at the corners.
+        background: { center: '#ffffff', edge: '#b3b3b3', size: 100 },
+      });
       createDebugOverlay(model, viewer, { visible: params.has('debug') });
 
       // Phase 1: mouse input. Phase 2 adds the game controller here.
