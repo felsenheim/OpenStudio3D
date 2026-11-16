@@ -1,6 +1,6 @@
 # OpenStudio3D: AR station, all values
 
-State as of 16 Nov 2026 (new 120 mm target from `ar/design.pdf`; defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
+State as of 16 Nov 2026 (120 mm target from `ar/design.pdf`; camera FOV fix, 66° for the iPhone 16; defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
 
 ## Links
 | What | Where |
@@ -37,7 +37,8 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
-    "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js",
+    "mindar-image": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
   },
   "scopes": {
     "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/": { "three": "../shared/three-compat.js?v=1" }
