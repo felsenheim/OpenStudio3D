@@ -1,6 +1,6 @@
 # OpenStudio3D: AR station, all values
 
-State as of 16 Nov 2026 (120 mm target from `ar/design.pdf`; camera FOV fix, 66° for the iPhone 16; defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
+State as of 16 Nov 2026 (two views: X-ray / full PBR; 120 mm target from `ar/design.pdf` with a two-part ring; camera FOV fix, 66° for the iPhone 16; defaults tuned on the iPhone: dead zone 3 mm / 1.5°, smooth 5, hysteresis 3°, height 150 mm). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
 
 ## Links
 | What | Where |
@@ -58,7 +58,7 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 | Circle centre | horizontally centred, **118 mm** from the top edge |
 | Circle content | your artwork from `ar/design.pdf` (shapes, letters, outline squares and circles), found automatically on the PDF page and scaled to 120 mm, unchanged otherwise; 0.5 mm black outline |
 | Front marker | black triangle + "front" just below the mode ring at 6 o'clock (outside the tracking image) |
-| Mode ring | **outside** the artwork, radius 61.5–66 mm, three arcs: FLAT steel blue `#2f4a6b` (300°–60°, at the front), SMOOTH grey `#969696` (60°–180°, left), PBR copper `#b06c34` (180°–300°, right) |
+| Mode ring | **outside** the artwork, radius 61.5–66 mm, two halves: **X-RAY** steel blue `#2f4a6b` (270°–90°, the half at the front arrow) and **PBR** copper `#b06c34` (90°–270°, the far half) |
 | QR code | 35 × 35 mm, bottom-right corner, 15 mm from the right and bottom edges, error correction M, links to `https://felsenheim.github.io/OpenStudio3D/ar/` |
 | Text | title "OpenStudio3D · AR" top left; two instruction lines + "Print at 100 % on matte paper." bottom left; font Inter |
 | Resolution | generated at 300 dpi |
@@ -68,7 +68,7 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 |---|---|
 | Image | `ar/target.png`, **1024 × 1024 px**, square crop around the circle |
 | Size on paper | **138 mm** wide (132 mm incl. mode ring + 3 mm margin on each side) → 7.42 px/mm. `TARGET_MM = 138` in `ar/index.html` |
-| Compiled | `ar/target.mind`, 685,481 bytes, matching points 3,290 over 11 scales, 29 / 21 tracking points |
+| Compiled | `ar/target.mind`, 661,539 bytes, matching points 3,170 over 11 scales, 28 / 20 tracking points |
 | Compiler | MindAR 1.2.5 `Compiler` (`tools/compile-target.html`, same as the online compiler) |
 
 ## MindAR settings
@@ -121,13 +121,12 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 - **Azimuth** = `atan2(−x, −y)` in degrees, 0–360: **0° = standing at the front arrow**, increasing **clockwise seen from above** (= walking to your left). Same sense as yaw on the sensor station.
 - **Elevation** = `atan2(z, √(x² + y²))` (shown in the debug overlay only).
 - The azimuth is read from the smoothed pose.
-- `model.forcedMode = modeForYaw(azimuth)` with **hysteresis of 3°** (`?hyst=`): the mode only changes once the azimuth is 3° past a border, so jitter at a border can't make the shading flicker. Zones:
+- `model.forcedMode = modeForYaw(azimuth)` with **hysteresis of 3°** (`?hyst=`): the view only changes once the azimuth is 3° past a border, so jitter at a border can't make it flicker. The hysteresis checks `modeForYaw(az ± hyst)`, so it works for any number of zones. Zones:
 
-| Azimuth | Where you stand | Mode |
+| Azimuth | Where you stand | View |
 |---|---|---|
-| 300°–60° | at the front arrow | 0: Flat solid (steel blue, flat-shaded, key light 4) |
-| 60°–180° | to the left | 1: Smooth + AO + normal (grey `#d9d9d9`, AO 1.6) |
-| 180°–300° | to the right | 2: Full PBR (original GLB material) |
+| 270°–90° | the front half (at the arrow) | 0: **X-ray** (fresnel, steel blue, see `docs/viewer-settings.md`) |
+| 90°–270° | the back half | 1: **Full PBR** (original GLB material) |
 
 ## Rendering
 | Item | Value |
@@ -135,7 +134,6 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 | Renderer | MindAR's `WebGLRenderer` (antialias, alpha), `setPixelRatio(min(devicePixelRatio, 2))` |
 | Tone mapping | `THREE.NeutralToneMapping` |
 | Environment | `RoomEnvironment` through `PMREMGenerator.fromScene(…, 0.04)` |
-| Key light | `model.keyLight` (directional, position (4, 2.5, 0.8), camera-relative); intensity 4 in flat mode, 0 otherwise |
 | Background | the camera image (MindAR video, `z-index: -2` inside `#ar`, which has its own stacking context) |
 | Frame loop | `renderer.setAnimationLoop` + `THREE.Timer`, `dt` capped at 0.1 s; `model.update(dt)` each frame |
 
@@ -159,6 +157,11 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 | `?hyst=` | 3 | mode-border hysteresis (°) |
 | `?height=` | 150 | model height on the card in mm |
 | `?fov=` | 66 | camera field of view across the video's long side (°) |
+| `?xcolor=` | `2f4a6b` | X-ray colour (hex, no #) |
+| `?xpower=` | 2.5 | X-ray rim width (higher = thinner) |
+| `?xint=` | 2 | X-ray rim strength |
+| `?xbase=` | 0.05 | X-ray opacity of surfaces facing the viewer |
+| `?xadd=` | 0 | 1 = additive X-ray glow |
 | `?cf=` | 0.0005 | MindAR `filterMinCF` |
 | `?beta=` | 10 | MindAR `filterBeta` |
 | `?model=` | `../models/head.glb` | another GLB |
@@ -166,7 +169,7 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 Example: `…/ar/?debug&height=90&dpos=4&drot=2&smooth=6`
 
 ### Tune panel (`?debug`, then the **Tune** button)
-Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smooth (0–30), mode hysteresis ° (0–20), model height mm (40–180), camera FOV ° (40–90; restarts the camera ~0.6 s after the last change). With `?debug` a red 100 mm check pole stands on the "front" arrow for calibrating the FOV. **Copy link with these values** puts the current settings into a URL (also shown under the buttons); **Reset** returns to the defaults. The MindAR filter (`cf`, `beta`) is set when the camera starts, so it stays a URL option.
+Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smooth (0–30), mode hysteresis ° (0–20), model height mm (40–180), camera FOV ° (40–90; restarts the camera ~0.6 s after the last change), X-ray rim width / rim strength / facing opacity, X-ray colour picker and additive checkbox. The panel scrolls if it's taller than 62 % of the screen. With `?debug` a red 100 mm check pole stands on the "front" arrow for calibrating the FOV. **Copy link with these values** puts the current settings into a URL (also shown under the buttons); **Reset** returns to the defaults. The MindAR filter (`cf`, `beta`) is set when the camera starts, so it stays a URL option.
 
 ## Devices
 - iPhone / iPad: Safari or Chrome (both use WebKit on iOS). Android: Chrome.
@@ -182,7 +185,8 @@ Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smo
 5. Commit everything. Reprint the card: an old printout won't match a new `target.mind`.
 
 ## Test status
-- 120 mm card (current), headless Chrome, simulated phone camera with noise and blur, 35° above the table: card found from all sides, modes switch correctly, model stands on the card. Raw pose shake about 1 mm at 30–40 cm (absorbed by the 3 mm dead zone); **not found from 60 cm** in poor image conditions. Use the station from about 25–45 cm.
+- Two views (X-ray / PBR), simulated walk-around: X-ray up to 88.7°, PBR from 94°, X-ray again before 0°; ring labels match. On the busy artwork the steel-blue X-ray is quieter than on white: tune colour / rim on the iPhone.
+- 120 mm card, headless Chrome, simulated phone camera with noise and blur, 35° above the table: card found from all sides, modes switch correctly, model stands on the card. Raw pose shake about 1 mm at 30–40 cm (absorbed by the 3 mm dead zone); **not found from 60 cm** in poor image conditions. Use the station from about 25–45 cm.
 - Comparison (same test, 60 cm): the earlier 184 mm scan-texture card shook 1.4 mm; smaller targets need the camera closer.
 - iPhone 16 with the 120 mm card: the model leaned relative to the card → MindAR's fixed 45° FOV; now 66° and adjustable.
-- Tested on the iPhone with the previous 184 mm card: smoothing defaults confirmed. **Still to do:** iPhone test with the new 120 mm card.
+- Tested on the iPhone with the previous 184 mm card: smoothing defaults confirmed. **Still to do:** iPhone test with the reprinted card (two-part ring) and the X-ray look.

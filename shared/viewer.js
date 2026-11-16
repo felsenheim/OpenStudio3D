@@ -1,8 +1,9 @@
 // Shared viewer for both stations.
 //
-//   loadTangibleModel(url)   -> model controller (GLB, shading modes, smoothing)
+//   loadTangibleModel(url)   -> model controller (GLB, two views: X-ray / full PBR, smoothing)
 //   createScreenViewer(...)  -> renderer + fixed camera + RoomEnvironment (sensor station)
-//   createDebugOverlay(...)  -> press "D" to toggle angle / mode / SMOOTH slider
+//   createDebugOverlay(...)  -> press "D" to toggle angle / mode / SMOOTH + X-ray sliders
+//   makeXrayMaterial(...)    -> fresnel "X-ray" material (rims strong, facing surfaces faint)
 //
 // Orientation convention (same as an orbit camera, but the model turns instead):
 //   yaw   = rotation around the vertical axis, + = model turns to its left (front moves right on screen)
@@ -13,26 +14,61 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-export const MODES = ['Flat solid', 'Smooth + AO + normal', 'Full PBR'];
+export const MODES = ['X-ray', 'Full PBR'];
 const DEG = Math.PI / 180;
 
-// Hard switch at 60° / 180° / 300°: 0° -> flat, 120° -> smooth, 240° -> PBR.
+// Two views, hard switch at 90° / 270°: front half (270°–90°, around 0°) -> X-ray,
+// back half (90°–270°, around 180°) -> full PBR.
 export function modeForYaw(yawDeg) {
   const y = ((yawDeg % 360) + 360) % 360;
-  if (y >= 60 && y < 180) return 1;
-  if (y >= 180 && y < 300) return 2;
-  return 0;
+  return y >= 90 && y < 270 ? 1 : 0;
+}
+
+// Fresnel "X-ray": surfaces facing the viewer are almost transparent, outlines and
+// grazing edges are strong; overlapping parts show through each other.
+// Normal blending with a dark colour reads well on the white sensor background
+// (additive glow would vanish on white); additive is an option for dark backgrounds.
+export function makeXrayMaterial({ color = 0x2f4a6b, power = 2.5, intensity = 2.0, base = 0.05,
+                                   additive = false } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      color: { value: new THREE.Color(color) },
+      power: { value: power },          // higher = thinner rim
+      intensity: { value: intensity },  // rim strength
+      base: { value: base },            // opacity of surfaces facing the viewer
+    },
+    vertexShader: /* glsl */`
+      varying vec3 vN; varying vec3 vV;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 color; uniform float power, intensity, base;
+      varying vec3 vN; varying vec3 vV;
+      void main() {
+        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), power);
+        gl_FragColor = vec4(color, clamp(base + f * intensity, 0.0, 1.0));
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+  });
 }
 
 export async function loadTangibleModel(url, {
   frontYawDeg = 0,     // turn the model so its "front" faces the viewer at yaw 0
   size = 1,            // the model is scaled to fit a sphere of this radius
   smooth = 12,         // SMOOTH: higher = snappier, lower = calmer
-  flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
-  flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
-  flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
-  smoothColor = 0xd9d9d9, // smooth mode (AO + normal map): 15% grey
-  smoothAO = 1.6,         // smooth mode: AO strength (1 = as baked; higher = deeper creases)
+  xrayColor = 0x2f4a6b,   // X-ray: rim colour (dark reads best on the white sensor background)
+  xrayPower = 2.5,        // X-ray: higher = thinner rim
+  xrayIntensity = 2.0,    // X-ray: rim strength
+  xrayBase = 0.05,        // X-ray: opacity of surfaces facing the viewer
+  xrayAdditive = false,   // X-ray: additive glow instead of normal blending (only for dark backgrounds)
   onProgress,
 } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
@@ -53,35 +89,19 @@ export async function loadTangibleModel(url, {
   const root = new THREE.Group();              // this one gets the orientation
   root.add(front);
 
-  // --- three shading modes, built once ---
+  // --- two views, built once: 0 = X-ray (one shared material), 1 = the original GLB material ---
+  const xray = makeXrayMaterial({ color: xrayColor, power: xrayPower, intensity: xrayIntensity,
+                                  base: xrayBase, additive: xrayAdditive });
   const meshes = [];
-  const flatMats = [];
   scene.traverse((o) => {
     if (!o.isMesh) return;
-    const pbr = o.material;
-    const flat = new THREE.MeshStandardMaterial({
-      color: flatColor, roughness: 0.75, metalness: 0, flatShading: true, side: pbr.side,
-      envMapIntensity: flatEnv,
-    });
-    flatMats.push(flat);
-    const smoothMat = new THREE.MeshStandardMaterial({
-      color: smoothColor, roughness: 0.55, metalness: 0, side: pbr.side,
-      aoMap: pbr.aoMap || null, aoMapIntensity: smoothAO,
-      normalMap: pbr.normalMap || null,
-    });
-    if (pbr.normalMap) smoothMat.normalScale.copy(pbr.normalScale);
-    meshes.push({ mesh: o, materials: [flat, smoothMat, pbr] });
+    meshes.push({ mesh: o, materials: [xray, o.material] });
   });
 
   const info = {
-    hasAO: meshes.some((m) => m.materials[2].aoMap),
-    hasNormalMap: meshes.some((m) => m.materials[2].normalMap),
+    hasAO: meshes.some((m) => m.materials[1].aoMap),
+    hasNormalMap: meshes.some((m) => m.materials[1].normalMap),
   };
-
-  // Key light for the flat mode, fixed relative to the camera (the viewer adds it to the scene).
-  // It stays in the scene in every mode (intensity 0 outside flat) so switching causes no shader recompile.
-  const keyLight = new THREE.DirectionalLight(0xffffff, 0);
-  keyLight.position.set(4, 2.5, 0.8);   // from the side and above: raking light shows the facets
 
   let mode = -1;
   let forcedMode = null;
@@ -101,19 +121,27 @@ export async function loadTangibleModel(url, {
     root,
     info,
     size,
-    keyLight,
-    flatKeyLight,
-    setFlatColor(c) { for (const m of flatMats) m.color.set(c); },
-    getFlatColor() { return '#' + flatMats[0].color.getHexString(); },
-    setSmoothColor(c) { for (const m of meshes) m.materials[1].color.set(c); },
-    getSmoothColor() { return '#' + meshes[0].materials[1].color.getHexString(); },
-    setSmoothAO(v) { for (const m of meshes) m.materials[1].aoMapIntensity = v; },
-    getSmoothAO() { return meshes[0].materials[1].aoMapIntensity; },
-    setFlatEnv(v) { for (const m of flatMats) m.envMapIntensity = v; },
-    getFlatEnv() { return flatMats[0].envMapIntensity; },
+    // X-ray look, adjustable live (debug overlay / AR Tune panel)
+    xray,
+    getXray() {
+      const u = xray.uniforms;
+      return { color: '#' + u.color.value.getHexString(), power: u.power.value, intensity: u.intensity.value,
+               base: u.base.value, additive: xray.blending === THREE.AdditiveBlending };
+    },
+    setXray({ color, power, intensity, base, additive } = {}) {
+      const u = xray.uniforms;
+      if (color !== undefined) u.color.value.set(color);
+      if (power !== undefined) u.power.value = power;
+      if (intensity !== undefined) u.intensity.value = intensity;
+      if (base !== undefined) u.base.value = base;
+      if (additive !== undefined) {
+        xray.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+        xray.needsUpdate = true;
+      }
+    },
     smooth,
     get mode() { return mode; },
-    // Force a mode (0/1/2) or null for automatic (by yaw).
+    // Force a mode (0 = X-ray, 1 = PBR) or null for automatic (by yaw).
     set forcedMode(v) { forcedMode = v; },
     get forcedMode() { return forcedMode; },
 
@@ -136,7 +164,6 @@ export async function loadTangibleModel(url, {
     update(dt) {
       root.quaternion.slerp(target, 1 - Math.exp(-ctrl.smooth * dt));
       setMode(forcedMode ?? modeForYaw(ctrl.getAngles().yaw));
-      keyLight.intensity = mode === 0 ? ctrl.flatKeyLight : 0;
     },
   };
   ctrl.setTargetOrientation(0, 0);
@@ -167,7 +194,6 @@ export function createScreenViewer(container, model, {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.add(model.root);
-  scene.add(model.keyLight);
 
   const camera = new THREE.PerspectiveCamera(fovDeg, 1, 0.01, 100);
   const radius = model.size; // the model fits a sphere of this radius at any orientation
@@ -207,21 +233,19 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
   el.style.cssText = `position:fixed;top:12px;left:12px;z-index:10;padding:10px 12px;
     background:rgba(0,0,0,.65);color:#eee;font:12px/1.5 ui-monospace,monospace;
     border-radius:6px;min-width:230px;user-select:none`;
+  const slider = (k, label, min, max, step) => `
+      <label style="display:block">${label} <span data-v="${k}"></span><br>
+        <input data-k="${k}" type="range" min="${min}" max="${max}" step="${step}" style="width:100%"></label>`;
   el.innerHTML = `
     <div data-k="txt"></div>
-    <label style="display:block;margin-top:6px">SMOOTH <span data-k="sv"></span><br>
-      <input data-k="s" type="range" min="1" max="40" step="0.5" style="width:100%"></label>
-    <div style="margin-top:6px;border-top:1px solid #555;padding-top:6px">Flat mode:
-      <label style="display:block">colour <input data-k="fc" type="color"> <span data-k="fcv"></span></label>
-      <label style="display:block">key light <span data-k="klv"></span><br>
-        <input data-k="kl" type="range" min="0" max="6" step="0.1" style="width:100%"></label>
-      <label style="display:block">room light <span data-k="fev"></span><br>
-        <input data-k="fe" type="range" min="0" max="1" step="0.05" style="width:100%"></label>
-    </div>
-    <div style="margin-top:6px;border-top:1px solid #555;padding-top:6px">Smooth mode:
-      <label style="display:block">colour <input data-k="sc" type="color"> <span data-k="scv"></span></label>
-      <label style="display:block">AO strength <span data-k="aov"></span><br>
-        <input data-k="ao" type="range" min="0" max="3" step="0.05" style="width:100%"></label>
+    <label style="display:block;margin-top:6px">SMOOTH <span data-v="smooth"></span><br>
+      <input data-k="smooth" type="range" min="1" max="40" step="0.5" style="width:100%"></label>
+    <div style="margin-top:6px;border-top:1px solid #555;padding-top:6px">X-ray:
+      <label style="display:block">colour <input data-k="color" type="color"> <span data-v="color"></span></label>
+      ${slider('power', 'rim width (power)', 0.5, 6, 0.1)}
+      ${slider('intensity', 'rim strength', 0, 3, 0.05)}
+      ${slider('base', 'facing opacity', 0, 0.5, 0.01)}
+      <label style="display:block"><input data-k="additive" type="checkbox"> additive glow (dark backgrounds only)</label>
     </div>
     <div style="margin-top:4px">Mode:
       <select data-k="m"><option value="">auto (yaw)</option>
@@ -231,18 +255,16 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
   el.style.display = visible ? 'block' : 'none';
   document.body.appendChild(el);
   const q = (k) => el.querySelector(`[data-k="${k}"]`);
-  const s = q('s');
-  s.value = model.smooth;
-  s.oninput = () => { model.smooth = +s.value; };
-  const fc = q('fc'), kl = q('kl'), fe = q('fe');
-  fc.value = model.getFlatColor(); kl.value = model.flatKeyLight; fe.value = model.getFlatEnv();
-  fc.oninput = () => model.setFlatColor(fc.value);
-  kl.oninput = () => { model.flatKeyLight = +kl.value; };
-  fe.oninput = () => model.setFlatEnv(+fe.value);
-  const sc = q('sc'), ao = q('ao');
-  sc.value = model.getSmoothColor(); ao.value = model.getSmoothAO();
-  sc.oninput = () => model.setSmoothColor(sc.value);
-  ao.oninput = () => model.setSmoothAO(+ao.value);
+  const v = (k) => el.querySelector(`[data-v="${k}"]`);
+  q('smooth').value = model.smooth;
+  q('smooth').oninput = (e) => { model.smooth = +e.target.value; };
+  const x = model.getXray();
+  for (const k of ['color', 'power', 'intensity', 'base']) {
+    q(k).value = x[k];
+    q(k).oninput = (e) => model.setXray({ [k]: k === 'color' ? e.target.value : +e.target.value });
+  }
+  q('additive').checked = x.additive;
+  q('additive').onchange = (e) => model.setXray({ additive: e.target.checked });
   q('m').onchange = (e) => { model.forcedMode = e.target.value === '' ? null : +e.target.value; };
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -258,14 +280,11 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
       `yaw   ${a.yaw.toFixed(1).padStart(6)}°<br>` +
       `pitch ${a.pitch.toFixed(1).padStart(6)}°<br>` +
       `mode  ${model.mode}: ${MODES[model.mode]}<br>` +
-      `AO ${model.info.hasAO ? 'yes' : 'no'} · normal map ${model.info.hasNormalMap ? 'yes' : 'no'}<br>` +
       `${fps.toFixed(0)} fps` + (extra ? `<br>${extra()}` : '');
-    q('sv').textContent = model.smooth;
-    q('fcv').textContent = model.getFlatColor();
-    q('klv').textContent = model.flatKeyLight;
-    q('fev').textContent = model.getFlatEnv();
-    q('scv').textContent = model.getSmoothColor();
-    q('aov').textContent = model.getSmoothAO();
+    const xr = model.getXray();
+    v('smooth').textContent = model.smooth;
+    v('color').textContent = xr.color;
+    for (const k of ['power', 'intensity', 'base']) v(k).textContent = xr[k];
   });
   return el;
 }

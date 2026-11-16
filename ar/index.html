@@ -41,7 +41,7 @@
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
     import { MindARThree } from 'mindar-image-three';
     import { Controller } from 'mindar-image';   // same class MindARThree uses (shared module)
-    import { loadTangibleModel, modeForYaw, MODES } from '../shared/viewer.js?v=9';
+    import { loadTangibleModel, modeForYaw, MODES } from '../shared/viewer.js?v=10';
 
     // ---- settings (URL options in brackets) ---------------------------------
     const params = new URLSearchParams(location.search);
@@ -58,10 +58,16 @@
       smooth: num('smooth', 5),    // easing speed toward the tracked pose; 0 = off
       hyst: num('hyst', 3),        // degrees past a mode border before the mode switches
       height: num('height', 150),  // model height on the card (mm)
+      xpower: num('xpower', 2.5),    // X-ray: rim width (higher = thinner)
+      xint: num('xint', 2),        // X-ray: rim strength
+      xbase: num('xbase', 0.05),   // X-ray: opacity of surfaces facing the viewer
+      xcolor: '#' + (params.get('xcolor') || '2f4a6b').replace('#', ''),   // X-ray colour
+      xadd: params.get('xadd') === '1',                                      // X-ray additive glow
       fov: num('fov', 66),         // camera field of view across the video's LONG side (deg). iPhone 16 main camera ≈ 63–67°.
                                    // MindAR's built-in assumption is 45° across the video height, which makes tall models lean.
     };
-    const DEFAULTS = { dpos: 3, drot: 1.5, smooth: 5, hyst: 3, height: 150, fov: 66 };
+    const DEFAULTS = { dpos: 3, drot: 1.5, smooth: 5, hyst: 3, height: 150, fov: 66,
+                       xpower: 2.5, xint: 2, xbase: 0.05, xcolor: '#2f4a6b', xadd: false };
     const DEG = 180 / Math.PI;
 
     const status = document.getElementById('status');
@@ -94,6 +100,9 @@
     placed.rotation.x = Math.PI / 2;
     const setHeight = (mm) => placed.scale.setScalar((mm / TARGET_MM) / height); // real-world size
     setHeight(tune.height);
+    const applyXray = () => model.setXray({ color: tune.xcolor, power: tune.xpower, intensity: tune.xint,
+                                            base: tune.xbase, additive: tune.xadd });
+    applyXray();
     placed.add(standing);
 
     // ---- MindAR --------------------------------------------------------------
@@ -125,7 +134,6 @@
     renderer.toneMapping = THREE.NeutralToneMapping;
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.add(model.keyLight);   // flat-mode key light, fixed relative to the camera like on the sensor station
 
     // MindAR writes the raw card pose into anchor.group.matrix. The model hangs on a
     // separate group that follows that pose with a dead zone + easing (see updatePose).
@@ -198,6 +206,9 @@
         ['hyst', 'Mode hysteresis', '°', 0, 20, 1],
         ['height', 'Model height', 'mm', 40, 180, 5],
         ['fov', 'Camera FOV, long side (restarts camera)', '°', 40, 90, 1],
+        ['xpower', 'X-ray rim width (power)', '', 0.5, 6, 0.1],
+        ['xint', 'X-ray rim strength', '', 0, 3, 0.05],
+        ['xbase', 'X-ray facing opacity', '', 0, 0.5, 0.01],
       ];
       const btn = document.createElement('button');
       btn.textContent = 'Tune';
@@ -205,10 +216,12 @@
         font:600 16px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:#eee;color:#111`;
       const panel = document.createElement('div');
       panel.style.cssText = `position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:7;
-        display:none;padding:12px 14px;background:rgba(0,0,0,.75);color:#eee;font:15px/1.3 system-ui,sans-serif;border-radius:10px`;
+        display:none;max-height:62vh;overflow-y:auto;padding:12px 14px;background:rgba(0,0,0,.75);color:#eee;font:15px/1.3 system-ui,sans-serif;border-radius:10px`;
       panel.innerHTML = sliders.map(([k, label, unit, min, max, step]) => `
         <label style="display:block;margin:6px 0">${label} <b data-v="${k}"></b> ${unit}
           <input data-k="${k}" type="range" min="${min}" max="${max}" step="${step}" style="width:100%;height:28px"></label>`).join('') + `
+        <label style="display:block;margin:6px 0">X-ray colour <input data-c="xcolor" type="color" style="width:56px;height:30px;vertical-align:middle"> <b data-v="xcolor"></b></label>
+        <label style="display:block;margin:6px 0"><input data-c="xadd" type="checkbox" style="width:22px;height:22px;vertical-align:middle"> X-ray additive glow</label>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button data-a="copy" style="flex:1;font:inherit;padding:10px;border:0;border-radius:6px">Copy link with these values</button>
           <button data-a="reset" style="font:inherit;padding:10px;border:0;border-radius:6px">Reset</button>
@@ -220,6 +233,8 @@
       const link = () => {
         const u = new URL(location.href);
         for (const [k] of sliders) u.searchParams.set(k, tune[k]);
+        u.searchParams.set('xcolor', tune.xcolor.replace('#', ''));
+        u.searchParams.set('xadd', tune.xadd ? '1' : '0');
         u.searchParams.set('debug', '');
         return u.toString().replace('debug=&', 'debug&').replace(/debug=$/, 'debug');
       };
@@ -228,15 +243,24 @@
           panel.querySelector(`[data-k="${k}"]`).value = tune[k];
           panel.querySelector(`[data-v="${k}"]`).textContent = tune[k];
         }
+        panel.querySelector('[data-c="xcolor"]').value = tune.xcolor;
+        panel.querySelector('[data-v="xcolor"]').textContent = tune.xcolor;
+        panel.querySelector('[data-c="xadd"]').checked = tune.xadd;
         panel.querySelector('[data-a="url"]').textContent = link();
       };
-      panel.addEventListener('input', (e) => {
+      const onInput = (e) => {
+        const c = e.target.dataset.c;
+        if (c === 'xcolor') { tune.xcolor = e.target.value; applyXray(); show(); return; }
+        if (c === 'xadd') { tune.xadd = e.target.checked; applyXray(); show(); return; }
         const k = e.target.dataset.k; if (!k) return;
         tune[k] = +e.target.value;
         if (k === 'height') setHeight(tune.height);
         if (k === 'fov') restartCamera();
+        if (k.startsWith('x')) applyXray();
         show();
-      });
+      };
+      panel.addEventListener('input', onInput);
+      panel.addEventListener('change', (e) => { if (e.target.dataset.c === 'xadd') onInput(e); });
       panel.querySelector('[data-a="copy"]').onclick = async (e) => {
         try { await navigator.clipboard.writeText(link()); e.target.textContent = 'Copied ✓'; }
         catch { e.target.textContent = 'Copy failed: select the link below'; }
@@ -244,7 +268,7 @@
       };
       panel.querySelector('[data-a="reset"]').onclick = () => {
         Object.assign(tune, DEFAULTS); restartCamera();
-        setHeight(tune.height); show();
+        setHeight(tune.height); applyXray(); show();
       };
       show();
       window.tune = tune;

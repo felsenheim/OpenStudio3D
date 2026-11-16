@@ -3,7 +3,7 @@
 The design (ar/design.pdf) holds one circular artwork anywhere on the page. This
 script finds it, scales it to DESIGN_MM, centres it on an A4 card and adds,
 outside the artwork so nothing of it is covered:
-  - a thin mode ring (FLAT / SMOOTH / PBR) around the circle,
+  - a thin mode ring around the circle: X-RAY (front half) / PBR (back half),
   - a "front" arrow below the ring (where the viewer stands for 0°),
   - title, instructions and a QR code to /ar/ in the bottom-right corner.
 
@@ -78,10 +78,11 @@ def curved_text(text, r_mm, mid_deg, fnt, fill, upright_top):
 
 # --- mode ring outside the artwork ---------------------------------------------
 ro, ri = RING_OUT * MM, RING_IN * MM
-modes = [(-60, 60, (47, 74, 107), "FLAT"), (60, 180, (150, 150, 150), "SMOOTH"), (180, 300, (176, 108, 52), "PBR")]
+# Two views: X-RAY on the half at the "front" arrow (270°–90°), PBR on the far half (90°–270°)
+modes = [(-90, 90, (47, 74, 107), "X-RAY"), (90, 270, (176, 108, 52), "PBR")]
 for a0, a1, col, label in modes:
     d.pieslice([cx - ro, cy - ro, cx + ro, cy + ro], 90 + a0, 90 + a1, fill=col)
-for a in (60, 180, 300):
+for a in (90, 270):
     d.line([P(RING_IN - 0.5, a), P(RING_OUT + 0.5, a)], fill="white", width=round(0.8 * MM))
 d.ellipse([cx - ri, cy - ri, cx + ri, cy + ri], fill="white")
 card.paste(art, (round(cx - side / 2), round(cy - side / 2)), mask)   # artwork back on top

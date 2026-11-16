@@ -31,31 +31,29 @@ Local test: `npx serve` (or `python3 -m http.server`) in this folder, then open 
 | Drag up / down | Elevation (pitch), limited to ±90° |
 | Arrow keys | Nudge by 15° |
 | `0` | Back to front view |
-| `D` | Debug overlay: angles, mode, AO / normal-map status, fps, SMOOTH slider, mode override |
+| `D` | Debug overlay: angles, mode, fps, SMOOTH slider, X-ray colour / rim width / rim strength / facing opacity / additive, mode override |
 
 URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` loads another model.
 
 ## AR station
 1. Print `ar/card.pdf` at 100 % (actual size) on matte paper; the artwork circle must measure 120 mm. Use the station from about 25–45 cm.
 2. Scan the QR code (it opens `/ar/`), allow the camera, point at the circle.
-3. Walk around the card: the side facing you picks the mode (front arrow = flat, your left = smooth, your right = PBR).
+3. Walk around the card: the half you stand on picks the view (front half, at the arrow = X-ray; back half = full PBR). The ring on the card shows the two halves.
 
-URL options: `?debug` (azimuth, elevation, mode, fps), `?height=150` (model height on the card in mm), `?cf=0.0005&beta=10` (MindAR filter: lower `cf` = calmer when still, higher `beta` = less lag when moving), `?smooth=5&dpos=3&drot=1.5` (own pose smoothing: easing speed, dead zone in mm and degrees), `?hyst=3` (degrees past a mode border before switching). `?fov=66` (camera field of view across the video's long side; MindAR's built-in 45° makes tall models lean). With `?debug` a red check pole stands on the front arrow: stand a pen there and adjust Camera FOV in the Tune panel until they match.
+URL options: `?debug` (azimuth, elevation, mode, fps), `?height=150` (model height on the card in mm), `?cf=0.0005&beta=10` (MindAR filter: lower `cf` = calmer when still, higher `beta` = less lag when moving), `?smooth=5&dpos=3&drot=1.5` (own pose smoothing: easing speed, dead zone in mm and degrees), `?hyst=3` (degrees past a mode border before switching), `?xcolor=2f4a6b&xpower=2.5&xint=2&xbase=0.05&xadd=0` (X-ray look). `?fov=66` (camera field of view across the video's long side; MindAR's built-in 45° makes tall models lean). With `?debug` a red check pole stands on the front arrow: stand a pen there and adjust Camera FOV in the Tune panel until they match.
 
 After changing the artwork (replace `ar/design.pdf`): `python3 tools/make_card.py`, then open `tools/compile-target.html` (local server) to get a new `ar/target.mind`.
 
-## Shading modes (by yaw, hard switch at 60° / 180° / 300°)
-| Yaw | Mode |
+## Views (by yaw, hard switch at 90° / 270°)
+| Yaw | View |
 |---|---|
-| 300°–60° (around 0°) | Flat-shaded solid in deep steel blue with a raking key light, no textures (colour + light tunable in the debug overlay) |
-| 60°–180° (around 120°) | Smooth 15% grey (`#d9d9d9`) + baked AO at strength 1.6 + normal map (used automatically once the GLB has one) |
-| 180°–300° (around 240°) | Original GLB material (full PBR) |
+| 270°–90° (front half, around 0°) | **X-ray**: fresnel shader, outlines and grazing edges strong, surfaces facing you almost transparent, overlapping parts show through. Steel blue `#2f4a6b`, normal blending (tunable in the debug overlay) |
+| 90°–270° (back half, around 180°) | **Full PBR**: the original GLB material |
 
 ## Settings to tune (in `sensor/index.html`)
 - `frontYawDeg`: rotates the model so its front faces the screen at yaw 0.
-- `flatColor`, `flatKeyLight`, `flatEnv`: look of the flat mode (default `0x2f4a6b`, 4, 0.08). Try values live in the debug overlay, then copy them here.
+- `xrayColor`, `xrayPower`, `xrayIntensity`, `xrayBase`, `xrayAdditive`: look of the X-ray view (default `0x2f4a6b`, 2.5, 2.0, 0.05, false). Try values live in the debug overlay, then copy them here.
 - `background`: circular falloff `{ center: '#ffffff', edge: '#666666', hold: 35, size: 100 }`; `hold` = how far pure white extends, `size` = where the edge colour is reached (both in % of the distance from the centre to the corners).
-- `smoothColor`, `smoothAO`: look of the smooth mode (default `0xd9d9d9` = 15% grey, AO strength 1.6). Both are adjustable live in the debug overlay.
 - `smooth`: SMOOTH, default 12. Higher is snappier, lower is calmer. It can also be tried live with the slider in the debug overlay.
 
 ## Updating the live site
@@ -67,7 +65,8 @@ const model = await loadTangibleModel(url, { frontYawDeg, smooth });
 model.setTargetOrientation(yawDeg, pitchDeg); // or model.setTargetQuaternion(q)
 model.update(dt);        // called by the viewer each frame (slerp + mode switch)
 model.getAngles();       // smoothed { yaw, pitch } in degrees
-model.forcedMode = 1;    // force a mode; null = automatic
+model.forcedMode = 1;    // force a view (0 = X-ray, 1 = PBR); null = automatic
+model.setXray({ color, power, intensity, base, additive }); // change the X-ray look live
 model.root               // THREE.Group to add to any scene (also the AR anchor)
 ```
 Rotation = Rx(-pitch) · Ry(yaw): the tilt always goes toward the viewer, like an orbit camera.
