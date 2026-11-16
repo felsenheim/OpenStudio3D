@@ -39,7 +39,7 @@ URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` load
 2. Scan the QR code (it opens `/ar/`), allow the camera, point at the circle.
 3. Walk around the card: the side facing you picks the mode (front arrow = flat, your left = smooth, your right = PBR).
 
-URL options: `?debug` (azimuth, elevation, mode, fps), `?height=120` (model height on the card in mm), `?cf=0.0005&beta=10` (MindAR filter: lower `cf` = calmer when still, higher `beta` = less lag when moving), `?smooth=10&dpos=3&drot=1.5` (own pose smoothing: easing speed, dead zone in mm and degrees), `?hyst=6` (degrees past a mode border before switching).
+URL options: `?debug` (azimuth, elevation, mode, fps), `?height=150` (model height on the card in mm), `?cf=0.0005&beta=10` (MindAR filter: lower `cf` = calmer when still, higher `beta` = less lag when moving), `?smooth=5&dpos=3&drot=1.5` (own pose smoothing: easing speed, dead zone in mm and degrees), `?hyst=3` (degrees past a mode border before switching).
 
 After changing the card: `python3 tools/make_card.py`, then open `tools/compile-target.html` (local server) to get a new `ar/target.mind`.
 

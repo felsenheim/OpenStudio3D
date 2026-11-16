@@ -52,9 +52,9 @@
     const tune = {
       dpos: num('dpos', 3),        // dead zone: ignore position changes smaller than this (mm)
       drot: num('drot', 1.5),      // dead zone: ignore rotation changes smaller than this (deg)
-      smooth: num('smooth', 10),   // easing speed toward the tracked pose; 0 = off
-      hyst: num('hyst', 6),        // degrees past a mode border before the mode switches
-      height: num('height', 120),  // model height on the card (mm)
+      smooth: num('smooth', 5),    // easing speed toward the tracked pose; 0 = off
+      hyst: num('hyst', 3),        // degrees past a mode border before the mode switches
+      height: num('height', 150),  // model height on the card (mm)
     };
     const DEG = 180 / Math.PI;
 
@@ -220,7 +220,7 @@
         setTimeout(() => { e.target.textContent = 'Copy link with these values'; }, 2000);
       };
       panel.querySelector('[data-a="reset"]').onclick = () => {
-        Object.assign(tune, { dpos: 3, drot: 1.5, smooth: 10, hyst: 6, height: 120 });
+        Object.assign(tune, { dpos: 3, drot: 1.5, smooth: 5, hyst: 3, height: 150 });
         setHeight(tune.height); show();
       };
       show();
