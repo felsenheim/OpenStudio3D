@@ -3,6 +3,8 @@
 Project: Tangible Interface. three.js viewer on GitHub Pages with two stations (sensor `/sensor/`, AR `/ar/`) sharing `shared/viewer.js` and one GLB.
 Guiding principle: **keep it simple**: static files, no build tools, three.js 0.187.0 from jsDelivr via an import map.
 
+**Current values (colours, lights, background, camera, conventions, AR notes): `docs/viewer-settings.md`.**
+
 Full brief and plan: paste `task-brief.md` and `work-plan.md` into `docs/` (they live in the Claude project "VR/XR experiance").
 
 ## Status
