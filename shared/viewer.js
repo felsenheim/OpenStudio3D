@@ -142,15 +142,17 @@ export async function loadTangibleModel(url, {
 
 // Full-window viewer with a fixed camera (no zoom, no pan).
 // background: { center, edge, size } -> circular falloff from the centre colour to the edge colour.
+//   hold = how far the pure centre colour extends before the falloff starts (% of centre-to-corner distance).
 //   size = where the edge colour is reached, in % of the distance from the centre to the farthest corner.
 export function createScreenViewer(container, model, {
-  background = { center: '#ffffff', edge: '#b3b3b3', size: 100 },
+  background = { center: '#ffffff', edge: '#999999', hold: 5, size: 100 },
   fovDeg = 30, margin = 1.08,
 } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0);   // transparent canvas: the CSS gradient shows through
-  const setBackground = ({ center, edge, size = 100 }) => {
-    container.style.background = `radial-gradient(circle farthest-corner at 50% 50%, ${center} 0%, ${edge} ${size}%)`;
+  const setBackground = ({ center, edge, hold = 0, size = 100 }) => {
+    container.style.background =
+      `radial-gradient(circle farthest-corner at 50% 50%, ${center} 0%, ${center} ${hold}%, ${edge} ${size}%)`;
   };
   setBackground(background);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
