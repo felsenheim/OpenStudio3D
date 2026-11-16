@@ -31,7 +31,8 @@ export async function loadTangibleModel(url, {
   flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
   flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
   flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
-  smoothColor = 0xffffff, // smooth mode (AO + normal map): base colour
+  smoothColor = 0xe6e6e6, // smooth mode (AO + normal map): off-white, 10% grey
+  smoothAO = 1.6,         // smooth mode: AO strength (1 = as baked; higher = deeper creases)
   onProgress,
 } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
@@ -65,7 +66,7 @@ export async function loadTangibleModel(url, {
     flatMats.push(flat);
     const smoothMat = new THREE.MeshStandardMaterial({
       color: smoothColor, roughness: 0.55, metalness: 0, side: pbr.side,
-      aoMap: pbr.aoMap || null, aoMapIntensity: pbr.aoMapIntensity ?? 1,
+      aoMap: pbr.aoMap || null, aoMapIntensity: smoothAO,
       normalMap: pbr.normalMap || null,
     });
     if (pbr.normalMap) smoothMat.normalScale.copy(pbr.normalScale);
@@ -105,6 +106,9 @@ export async function loadTangibleModel(url, {
     setFlatColor(c) { for (const m of flatMats) m.color.set(c); },
     getFlatColor() { return '#' + flatMats[0].color.getHexString(); },
     setSmoothColor(c) { for (const m of meshes) m.materials[1].color.set(c); },
+    getSmoothColor() { return '#' + meshes[0].materials[1].color.getHexString(); },
+    setSmoothAO(v) { for (const m of meshes) m.materials[1].aoMapIntensity = v; },
+    getSmoothAO() { return meshes[0].materials[1].aoMapIntensity; },
     setFlatEnv(v) { for (const m of flatMats) m.envMapIntensity = v; },
     getFlatEnv() { return flatMats[0].envMapIntensity; },
     smooth,
@@ -214,6 +218,11 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
       <label style="display:block">room light <span data-k="fev"></span><br>
         <input data-k="fe" type="range" min="0" max="1" step="0.05" style="width:100%"></label>
     </div>
+    <div style="margin-top:6px;border-top:1px solid #555;padding-top:6px">Smooth mode:
+      <label style="display:block">colour <input data-k="sc" type="color"> <span data-k="scv"></span></label>
+      <label style="display:block">AO strength <span data-k="aov"></span><br>
+        <input data-k="ao" type="range" min="0" max="3" step="0.05" style="width:100%"></label>
+    </div>
     <div style="margin-top:4px">Mode:
       <select data-k="m"><option value="">auto (yaw)</option>
         ${MODES.map((n, i) => `<option value="${i}">${i}: ${n}</option>`).join('')}
@@ -230,6 +239,10 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
   fc.oninput = () => model.setFlatColor(fc.value);
   kl.oninput = () => { model.flatKeyLight = +kl.value; };
   fe.oninput = () => model.setFlatEnv(+fe.value);
+  const sc = q('sc'), ao = q('ao');
+  sc.value = model.getSmoothColor(); ao.value = model.getSmoothAO();
+  sc.oninput = () => model.setSmoothColor(sc.value);
+  ao.oninput = () => model.setSmoothAO(+ao.value);
   q('m').onchange = (e) => { model.forcedMode = e.target.value === '' ? null : +e.target.value; };
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -251,6 +264,8 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
     q('fcv').textContent = model.getFlatColor();
     q('klv').textContent = model.flatKeyLight;
     q('fev').textContent = model.getFlatEnv();
+    q('scv').textContent = model.getSmoothColor();
+    q('aov').textContent = model.getSmoothAO();
   });
   return el;
 }
