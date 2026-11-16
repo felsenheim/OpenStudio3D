@@ -31,7 +31,7 @@ export async function loadTangibleModel(url, {
   flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
   flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
   flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
-  smoothColor = 0xf2f2f2, // smooth mode (AO + normal map): off-white, 5% grey
+  smoothColor = 0xffffff, // smooth mode (AO + normal map): base colour
   onProgress,
 } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
