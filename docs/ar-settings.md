@@ -79,6 +79,15 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 | `filterBeta` | **10** (higher = less lag when moving) | `?beta=` |
 | `uiLoading` / `uiScanning` / `uiError` | `no` (the page shows its own messages) | |
 | Camera | rear camera (`facingMode: environment`), chosen by MindAR | |
+| Camera field of view | **66°** across the video's long side (patched, see below) | `?fov=` |
+
+## Camera field of view (why the model could lean)
+MindAR 1.2.5 hard-codes the camera's field of view as **45° across the video height**. Phone cameras see more (iPhone 16 main camera, 26 mm equivalent: about 63–67° across the long side of the video, about 50° across the short side). With a too-small value MindAR misjudges how the card is tilted: the card itself still lines up (it's drawn with the same wrong camera), but anything standing up from the card **leans**, and a tall model shows it most. A small card viewed from close up makes it worse.
+
+- Fix in `ar/index.html`: `Controller.prototype.addImageTargetsFromBuffer` is wrapped so the camera geometry is recomputed from `tune.fov` (focal length = (long side / 2) / tan(fov / 2), the same for portrait and landscape) just before the target is loaded; `mindar.resize()` then applies it to the three.js camera. `Controller` is imported from `mindar-image.prod.js`, which shares its module with the three build.
+- Default **66°** (iPhone 16 main camera). Other phones may need 60–75°.
+- Simulated check (camera with 77° on the long side, true elevation 45°): MindAR's 45° → elevation read as 36°; `fov=55` → 35°; correct `fov=77` → 45.1°.
+- **Calibrating:** open `?debug`, stand a pen upright on the "front" arrow. A red 100 mm check pole is drawn there. Walk around: if the pole and the pen part ways, move the **Camera FOV** slider (the camera restarts after you let go) until they stay together from every side.
 
 ## Pose smoothing (on top of the MindAR filter)
 MindAR writes the raw card pose into `anchor.group.matrix`. The model hangs on a separate group (`card`) that follows it:
@@ -148,6 +157,7 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 | `?drot=` | 1.5 | dead zone for rotation (°) |
 | `?hyst=` | 3 | mode-border hysteresis (°) |
 | `?height=` | 150 | model height on the card in mm |
+| `?fov=` | 66 | camera field of view across the video's long side (°) |
 | `?cf=` | 0.0005 | MindAR `filterMinCF` |
 | `?beta=` | 10 | MindAR `filterBeta` |
 | `?model=` | `../models/head.glb` | another GLB |
@@ -155,7 +165,7 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 Example: `…/ar/?debug&height=90&dpos=4&drot=2&smooth=6`
 
 ### Tune panel (`?debug`, then the **Tune** button)
-Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smooth (0–30), mode hysteresis ° (0–20), model height mm (40–180). **Copy link with these values** puts the current settings into a URL (also shown under the buttons); **Reset** returns to the defaults. The MindAR filter (`cf`, `beta`) is set when the camera starts, so it stays a URL option.
+Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smooth (0–30), mode hysteresis ° (0–20), model height mm (40–180), camera FOV ° (40–90; restarts the camera ~0.6 s after the last change). With `?debug` a red 100 mm check pole stands on the "front" arrow for calibrating the FOV. **Copy link with these values** puts the current settings into a URL (also shown under the buttons); **Reset** returns to the defaults. The MindAR filter (`cf`, `beta`) is set when the camera starts, so it stays a URL option.
 
 ## Devices
 - iPhone / iPad: Safari or Chrome (both use WebKit on iOS). Android: Chrome.
@@ -173,4 +183,5 @@ Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smo
 ## Test status
 - 120 mm card (current), headless Chrome, simulated phone camera with noise and blur, 35° above the table: card found from all sides, modes switch correctly, model stands on the card. Raw pose shake about 1 mm at 30–40 cm (absorbed by the 3 mm dead zone); **not found from 60 cm** in poor image conditions. Use the station from about 25–45 cm.
 - Comparison (same test, 60 cm): the earlier 184 mm scan-texture card shook 1.4 mm; smaller targets need the camera closer.
+- iPhone 16 with the 120 mm card: the model leaned relative to the card → MindAR's fixed 45° FOV; now 66° and adjustable.
 - Tested on the iPhone with the previous 184 mm card: smoothing defaults confirmed. **Still to do:** iPhone test with the new 120 mm card.

@@ -21,7 +21,8 @@
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
-      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js",
+      "mindar-image": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
     },
     "scopes": {
       "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/": {
@@ -39,11 +40,13 @@
     import * as THREE from 'three';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
     import { MindARThree } from 'mindar-image-three';
+    import { Controller } from 'mindar-image';   // same class MindARThree uses (shared module)
     import { loadTangibleModel, modeForYaw, MODES } from '../shared/viewer.js?v=9';
 
     // ---- settings (URL options in brackets) ---------------------------------
     const params = new URLSearchParams(location.search);
     const num = (k, d) => (params.has(k) ? +params.get(k) : d);
+    const FRONT_MM = 70;                   // distance of the "front" arrow tip from the card centre (mm)
     const TARGET_MM = 138;                 // width of target.png on paper (120 mm artwork + mode ring to 132 mm + 3 mm margin each side)
     const FILTER_MIN_CF = num('cf', 0.0005);   // MindAR one-euro filter: lower = calmer when still [?cf=]
     const FILTER_BETA = num('beta', 10);       // higher = less lag when moving [?beta=]
@@ -55,7 +58,10 @@
       smooth: num('smooth', 5),    // easing speed toward the tracked pose; 0 = off
       hyst: num('hyst', 3),        // degrees past a mode border before the mode switches
       height: num('height', 150),  // model height on the card (mm)
+      fov: num('fov', 66),         // camera field of view across the video's LONG side (deg). iPhone 16 main camera ≈ 63–67°.
+                                   // MindAR's built-in assumption is 45° across the video height, which makes tall models lean.
     };
+    const DEFAULTS = { dpos: 3, drot: 1.5, smooth: 5, hyst: 3, height: 150, fov: 66 };
     const DEG = 180 / Math.PI;
 
     const status = document.getElementById('status');
@@ -91,6 +97,21 @@
     placed.add(standing);
 
     // ---- MindAR --------------------------------------------------------------
+    // MindAR hard-codes a 45° camera field of view. If the real camera sees more (phones
+    // usually do), the card's tilt is misjudged and the model leans. This patch recomputes
+    // the camera geometry from tune.fov just before the target is loaded (each start).
+    const addTargets = Controller.prototype.addImageTargetsFromBuffer;
+    Controller.prototype.addImageTargetsFromBuffer = function (buffer) {
+      const longSide = Math.max(this.inputWidth, this.inputHeight);   // same in portrait and landscape
+      const f = (longSide / 2) / Math.tan((tune.fov * Math.PI / 180) / 2);
+      this.projectionTransform = [[f, 0, this.inputWidth / 2], [0, f, this.inputHeight / 2], [0, 0, 1]];
+      this.projectionMatrix = this._glProjectionMatrix({
+        projectionTransform: this.projectionTransform,
+        width: this.inputWidth, height: this.inputHeight, near: 10, far: 100000,
+      });
+      return addTargets.call(this, buffer);
+    };
+
     const mindar = new MindARThree({
       container: document.getElementById('ar'),
       imageTargetSrc: './target.mind',
@@ -176,6 +197,7 @@
         ['smooth', 'Smooth', '', 0, 30, 1],
         ['hyst', 'Mode hysteresis', '°', 0, 20, 1],
         ['height', 'Model height', 'mm', 40, 180, 5],
+        ['fov', 'Camera FOV, long side (restarts camera)', '°', 40, 90, 1],
       ];
       const btn = document.createElement('button');
       btn.textContent = 'Tune';
@@ -212,6 +234,7 @@
         const k = e.target.dataset.k; if (!k) return;
         tune[k] = +e.target.value;
         if (k === 'height') setHeight(tune.height);
+        if (k === 'fov') restartCamera();
         show();
       });
       panel.querySelector('[data-a="copy"]').onclick = async (e) => {
@@ -220,19 +243,45 @@
         setTimeout(() => { e.target.textContent = 'Copy link with these values'; }, 2000);
       };
       panel.querySelector('[data-a="reset"]').onclick = () => {
-        Object.assign(tune, { dpos: 3, drot: 1.5, smooth: 5, hyst: 3, height: 150 });
+        Object.assign(tune, DEFAULTS); restartCamera();
         setHeight(tune.height); show();
       };
       show();
       window.tune = tune;
+
+      // Check pole: a red 100 mm stick standing on the "front" arrow. Stand a real pen
+      // upright on the arrow; with the right FOV the two stay together from every side.
+      const POLE_MM = 100;
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.5 / TARGET_MM, 1.5 / TARGET_MM, POLE_MM / TARGET_MM, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff2020 }));
+      pole.rotation.x = Math.PI / 2;
+      pole.position.set(0, -(FRONT_MM / TARGET_MM), POLE_MM / 2 / TARGET_MM);
+      card.add(pole);
     }
     let acc = 0, frames = 0, fps = 0, heldPct = 0;
+
+    // Restart MindAR so a new camera FOV takes effect (debounced while dragging the slider).
+    let restartTimer = null;
+    function restartCamera() {
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(async () => {
+        found = false; card.visible = false;
+        anchor.visible = false; anchor.group.visible = false;   // so MindAR reports "found" again
+        say('Restarting camera…');
+        try { mindar.stop(); } catch (e) { /* not running */ }
+        await mindar.start();
+        mindar.resize();
+        say('Point the camera at the round card.');
+      }, 600);
+    }
 
     // ---- start ---------------------------------------------------------------
     async function start() {
       say('Starting camera…');
       try {
         await mindar.start();
+        mindar.resize();   // apply the patched camera geometry to the three.js camera
       } catch (err) {
         console.error(err);
         say('No camera access.<br>Allow the camera for this site (Settings › Safari/Chrome › Camera), then reload.' +
