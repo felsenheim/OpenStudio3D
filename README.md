@@ -40,7 +40,7 @@ URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` load
 ## Settings to tune (in `sensor/index.html`)
 - `frontYawDeg`: rotates the model so its front faces the screen at yaw 0.
 - `flatColor`, `flatKeyLight`, `flatEnv`: look of the flat mode (default `0x2f4a6b`, 4, 0.08). Try values live in the debug overlay, then copy them here.
-- `background`: circular falloff `{ center: '#ffffff', edge: '#404040', hold: 5, size: 100 }`; `hold` = how far pure white extends, `size` = where the edge colour is reached (both in % of the distance from the centre to the corners).
+- `background`: circular falloff `{ center: '#ffffff', edge: '#404040', hold: 20, size: 100 }`; `hold` = how far pure white extends, `size` = where the edge colour is reached (both in % of the distance from the centre to the corners).
 - `smoothColor`: grey of the smooth mode (default `0x7a7a7a`, dark enough to stand out against the white centre).
 - `smooth`: SMOOTH, default 12. Higher is snappier, lower is calmer. It can also be tried live with the slider in the debug overlay.
 

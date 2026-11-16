@@ -38,8 +38,8 @@
         onProgress: (e) => { if (e.total) status.textContent = `Loading model… ${Math.round(e.loaded / e.total * 100)}%`; },
       });
       const viewer = createScreenViewer(document.getElementById('view'), model, {
-        // Circular falloff: white in the centre (held for the first 5%), dark grey (#404040) at the corners.
-        background: { center: '#ffffff', edge: '#404040', hold: 5, size: 100 },
+        // Circular falloff: white in the centre (held for the first 20%), dark grey (#404040) at the corners.
+        background: { center: '#ffffff', edge: '#404040', hold: 20, size: 100 },
       });
       createDebugOverlay(model, viewer, { visible: params.has('debug') });
 
