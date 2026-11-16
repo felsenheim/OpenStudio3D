@@ -28,6 +28,9 @@ export async function loadTangibleModel(url, {
   frontYawDeg = 0,     // turn the model so its "front" faces the viewer at yaw 0
   size = 1,            // the model is scaled to fit a sphere of this radius
   smooth = 12,         // SMOOTH: higher = snappier, lower = calmer
+  flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
+  flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
+  flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
   onProgress,
 } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
@@ -50,12 +53,15 @@ export async function loadTangibleModel(url, {
 
   // --- three shading modes, built once ---
   const meshes = [];
+  const flatMats = [];
   scene.traverse((o) => {
     if (!o.isMesh) return;
     const pbr = o.material;
     const flat = new THREE.MeshStandardMaterial({
-      color: 0xc8c8c8, roughness: 0.65, metalness: 0, flatShading: true, side: pbr.side,
+      color: flatColor, roughness: 0.75, metalness: 0, flatShading: true, side: pbr.side,
+      envMapIntensity: flatEnv,
     });
+    flatMats.push(flat);
     const smoothMat = new THREE.MeshStandardMaterial({
       color: 0xc8c8c8, roughness: 0.55, metalness: 0, side: pbr.side,
       aoMap: pbr.aoMap || null, aoMapIntensity: pbr.aoMapIntensity ?? 1,
@@ -69,6 +75,11 @@ export async function loadTangibleModel(url, {
     hasAO: meshes.some((m) => m.materials[2].aoMap),
     hasNormalMap: meshes.some((m) => m.materials[2].normalMap),
   };
+
+  // Key light for the flat mode, fixed relative to the camera (the viewer adds it to the scene).
+  // It stays in the scene in every mode (intensity 0 outside flat) so switching causes no shader recompile.
+  const keyLight = new THREE.DirectionalLight(0xffffff, 0);
+  keyLight.position.set(4, 2.5, 0.8);   // from the side and above: raking light shows the facets
 
   let mode = -1;
   let forcedMode = null;
@@ -88,6 +99,12 @@ export async function loadTangibleModel(url, {
     root,
     info,
     size,
+    keyLight,
+    flatKeyLight,
+    setFlatColor(c) { for (const m of flatMats) m.color.set(c); },
+    getFlatColor() { return '#' + flatMats[0].color.getHexString(); },
+    setFlatEnv(v) { for (const m of flatMats) m.envMapIntensity = v; },
+    getFlatEnv() { return flatMats[0].envMapIntensity; },
     smooth,
     get mode() { return mode; },
     // Force a mode (0/1/2) or null for automatic (by yaw).
@@ -113,6 +130,7 @@ export async function loadTangibleModel(url, {
     update(dt) {
       root.quaternion.slerp(target, 1 - Math.exp(-ctrl.smooth * dt));
       setMode(forcedMode ?? modeForYaw(ctrl.getAngles().yaw));
+      keyLight.intensity = mode === 0 ? ctrl.flatKeyLight : 0;
     },
   };
   ctrl.setTargetOrientation(0, 0);
@@ -132,6 +150,7 @@ export function createScreenViewer(container, model, { background = 0x2a2a2a, fo
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.add(model.root);
+  scene.add(model.keyLight);
 
   const camera = new THREE.PerspectiveCamera(fovDeg, 1, 0.01, 100);
   const radius = model.size; // the model fits a sphere of this radius at any orientation
@@ -175,6 +194,13 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
     <div data-k="txt"></div>
     <label style="display:block;margin-top:6px">SMOOTH <span data-k="sv"></span><br>
       <input data-k="s" type="range" min="1" max="40" step="0.5" style="width:100%"></label>
+    <div style="margin-top:6px;border-top:1px solid #555;padding-top:6px">Flat mode:
+      <label style="display:block">colour <input data-k="fc" type="color"> <span data-k="fcv"></span></label>
+      <label style="display:block">key light <span data-k="klv"></span><br>
+        <input data-k="kl" type="range" min="0" max="6" step="0.1" style="width:100%"></label>
+      <label style="display:block">room light <span data-k="fev"></span><br>
+        <input data-k="fe" type="range" min="0" max="1" step="0.05" style="width:100%"></label>
+    </div>
     <div style="margin-top:4px">Mode:
       <select data-k="m"><option value="">auto (yaw)</option>
         ${MODES.map((n, i) => `<option value="${i}">${i}: ${n}</option>`).join('')}
@@ -186,6 +212,11 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
   const s = q('s');
   s.value = model.smooth;
   s.oninput = () => { model.smooth = +s.value; };
+  const fc = q('fc'), kl = q('kl'), fe = q('fe');
+  fc.value = model.getFlatColor(); kl.value = model.flatKeyLight; fe.value = model.getFlatEnv();
+  fc.oninput = () => model.setFlatColor(fc.value);
+  kl.oninput = () => { model.flatKeyLight = +kl.value; };
+  fe.oninput = () => model.setFlatEnv(+fe.value);
   q('m').onchange = (e) => { model.forcedMode = e.target.value === '' ? null : +e.target.value; };
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -204,6 +235,9 @@ export function createDebugOverlay(model, viewer, { visible = false, extra } = {
       `AO ${model.info.hasAO ? 'yes' : 'no'} · normal map ${model.info.hasNormalMap ? 'yes' : 'no'}<br>` +
       `${fps.toFixed(0)} fps` + (extra ? `<br>${extra()}` : '');
     q('sv').textContent = model.smooth;
+    q('fcv').textContent = model.getFlatColor();
+    q('klv').textContent = model.flatKeyLight;
+    q('fev').textContent = model.getFlatEnv();
   });
   return el;
 }

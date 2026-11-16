@@ -33,12 +33,13 @@ URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` load
 ## Shading modes (by yaw, hard switch at 60° / 180° / 300°)
 | Yaw | Mode |
 |---|---|
-| 300°–60° (around 0°) | Flat-shaded grey solid, no textures |
+| 300°–60° (around 0°) | Flat-shaded solid in deep steel blue with a raking key light, no textures (colour + light tunable in the debug overlay) |
 | 60°–180° (around 120°) | Smooth grey + baked AO + normal map (used automatically once the GLB has one) |
 | 180°–300° (around 240°) | Original GLB material (full PBR) |
 
 ## Settings to tune (in `sensor/index.html`)
 - `frontYawDeg`: rotates the model so its front faces the screen at yaw 0.
+- `flatColor`, `flatKeyLight`, `flatEnv`: look of the flat mode (default `0x2f4a6b`, 4, 0.08). Try values live in the debug overlay, then copy them here.
 - `smooth`: SMOOTH, default 12. Higher is snappier, lower is calmer. It can also be tried live with the slider in the debug overlay.
 
 ## Viewer API (for the station adapters)
