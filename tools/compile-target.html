@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Compile ar/target.mind</title>
+  <style>body { font: 15px/1.5 system-ui, sans-serif; margin: 32px; max-width: 560px; }</style>
+</head>
+<body>
+  <h1>Compile <code>ar/target.mind</code></h1>
+  <p>Compiles <code>ar/target.png</code> with MindAR 1.2.5 (same as the online compiler) and downloads
+     <code>target.mind</code>. Put the file into <code>ar/</code> and commit it.
+     Open this page from a local server or GitHub Pages, not from <code>file://</code>.</p>
+  <button id="go">Compile</button>
+  <p id="out"></p>
+  <script type="module">
+    import { Compiler } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js';
+    const out = document.getElementById('out');
+    document.getElementById('go').onclick = async () => {
+      const img = new Image();
+      img.src = '../ar/target.png?' + Date.now();
+      await img.decode();
+      const compiler = new Compiler();
+      const data = await compiler.compileImageTargets([img], (p) => { out.textContent = `Compiling… ${p.toFixed(0)} %`; });
+      const buf = await compiler.exportData();
+      const pts = data[0].matchingData.map((m) => m.maximaPoints.length + m.minimaPoints.length);
+      out.textContent = `Done: ${buf.byteLength} bytes, feature points per scale: ${pts.join(', ')}`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([buf]));
+      a.download = 'target.mind';
+      a.click();
+    };
+  </script>
+</body>
+</html>

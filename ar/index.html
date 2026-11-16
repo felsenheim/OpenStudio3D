@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tangible Interface · AR station</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    /* own stacking context, so MindAR's video (z-index -2) stays inside it */
+    #ar { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
+    #status { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom));
+      transform: translateX(-50%); z-index: 5; max-width: 86vw; text-align: center;
+      color: #eee; font: 16px/1.4 system-ui, sans-serif; background: rgba(0,0,0,.6);
+      padding: 10px 16px; border-radius: 8px; }
+    #status button { margin-top: 8px; font: inherit; padding: 8px 16px; border-radius: 6px;
+      border: 0; background: #eee; color: #111; }
+    #status.hidden { display: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    },
+    "scopes": {
+      "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/": {
+        "three": "../shared/three-compat.js?v=1"
+      }
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="ar"></div>
+  <div id="status">Loading model…</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { MindARThree } from 'mindar-image-three';
+    import { loadTangibleModel, modeForYaw, MODES } from '../shared/viewer.js?v=9';
+
+    // ---- settings (URL options in brackets) ---------------------------------
+    const params = new URLSearchParams(location.search);
+    const num = (k, d) => (params.has(k) ? +params.get(k) : d);
+    const TARGET_MM = 190;                 // width of target.png on paper (184 mm circle + 3 mm margin each side)
+    const HEIGHT_MM = num('height', 120);  // model height on the card [?height=]
+    const FILTER_MIN_CF = num('cf', 0.0005);   // MindAR one-euro filter: lower = calmer when still [?cf=]
+    const FILTER_BETA = num('beta', 10);       // higher = less lag when moving [?beta=]
+    const DEG = 180 / Math.PI;
+
+    const status = document.getElementById('status');
+    const say = (html) => { status.innerHTML = html; status.classList.remove('hidden'); };
+    const hide = () => status.classList.add('hidden');
+
+    // ---- model ---------------------------------------------------------------
+    let model;
+    try {
+      model = await loadTangibleModel(params.get('model') || '../models/head.glb', {
+        frontYawDeg: 0,
+        onProgress: (e) => { if (e.total) say(`Loading model… ${Math.round(e.loaded / e.total * 100)}%`); },
+      });
+    } catch (err) {
+      console.error(err);
+      say('Could not load the model: ' + err.message);
+      throw err;
+    }
+
+    // Stand the model on the card. Anchor space: card centre = origin, card width = 1,
+    // x right, y toward the top of the card, z up out of the card.
+    // Model space: y up, front = +z.  Rx(+90°) maps model y -> card z (up) and the
+    // model's front -> card -y, i.e. toward the "front" arrow at the bottom of the card.
+    const box = new THREE.Box3().setFromObject(model.root);
+    const height = box.max.y - box.min.y;
+    const standing = new THREE.Group();
+    standing.add(model.root);
+    model.root.position.y = -box.min.y;                       // base on the card plane
+    const placed = new THREE.Group();
+    placed.rotation.x = Math.PI / 2;
+    placed.scale.setScalar((HEIGHT_MM / TARGET_MM) / height); // real-world size
+    placed.add(standing);
+
+    // ---- MindAR --------------------------------------------------------------
+    const mindar = new MindARThree({
+      container: document.getElementById('ar'),
+      imageTargetSrc: './target.mind',
+      maxTrack: 1,
+      uiLoading: 'no', uiScanning: 'no', uiError: 'no',   // own messages instead
+      filterMinCF: FILTER_MIN_CF,
+      filterBeta: FILTER_BETA,
+    });
+    const { renderer, scene, camera } = mindar;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.add(model.keyLight);   // flat-mode key light, fixed relative to the camera like on the sensor station
+
+    const anchor = mindar.addAnchor(0);
+    anchor.group.add(placed);
+    let found = false;
+    anchor.onTargetFound = () => { found = true; hide(); };
+    anchor.onTargetLost = () => { found = false; say('Point the camera at the round card.'); };
+
+    // ---- viewing angle around the card -> shading mode --------------------------
+    // Card angle: 0° = the "front" arrow (bottom edge of the card), increasing clockwise
+    // seen from above, i.e. walking to your left. Same sense as yaw on the sensor station.
+    const inv = new THREE.Matrix4();
+    const cam = new THREE.Vector3();
+    const view = { azimuth: 0, elevation: 90 };
+    function updateViewAngle() {
+      inv.copy(anchor.group.matrix).invert();
+      cam.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inv);  // camera in card space
+      view.azimuth = (Math.atan2(-cam.x, -cam.y) * DEG + 360) % 360;
+      view.elevation = Math.atan2(cam.z, Math.hypot(cam.x, cam.y)) * DEG;
+    }
+
+    // ---- debug (?debug) ------------------------------------------------------
+    let debugEl = null;
+    if (params.has('debug')) {
+      debugEl = document.createElement('div');
+      debugEl.style.cssText = `position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:6;
+        padding:8px 10px;background:rgba(0,0,0,.6);color:#eee;font:12px/1.5 ui-monospace,monospace;border-radius:6px`;
+      document.body.appendChild(debugEl);
+    }
+    let acc = 0, frames = 0, fps = 0;
+
+    // ---- start ---------------------------------------------------------------
+    async function start() {
+      say('Starting camera…');
+      try {
+        await mindar.start();
+      } catch (err) {
+        console.error(err);
+        say('No camera access.<br>Allow the camera for this site (Settings › Safari/Chrome › Camera), then reload.' +
+            '<br><button onclick="location.reload()">Reload</button>');
+        return;
+      }
+      say('Point the camera at the round card.');
+      const timer = new THREE.Timer();
+      renderer.setAnimationLoop((time) => {
+        timer.update(time);
+        const dt = Math.min(timer.getDelta(), 0.1);
+        if (found) {
+          updateViewAngle();
+          model.forcedMode = modeForYaw(view.azimuth);
+        }
+        model.update(dt);
+        renderer.render(scene, camera);
+        if (debugEl) {
+          acc += dt; frames++;
+          if (acc > 0.5) { fps = frames / acc; acc = 0; frames = 0; }
+          debugEl.innerHTML = `card ${found ? 'found' : 'not found'}<br>` +
+            `azimuth ${view.azimuth.toFixed(1).padStart(6)}°<br>` +
+            `elevation ${view.elevation.toFixed(1).padStart(4)}°<br>` +
+            `mode ${model.mode}: ${MODES[model.mode]}<br>${fps.toFixed(0)} fps`;
+        }
+      });
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      say('This browser has no camera access. Open the page over https in Safari or Chrome.');
+    } else {
+      start();
+    }
+    window.model = model; window.mindar = mindar; window.view = view; // for testing in the console
+  </script>
+</body>
+</html>
