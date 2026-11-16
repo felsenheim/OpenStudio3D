@@ -8,7 +8,7 @@ State as of 16 Nov 2026 (phase 3 built). This file has everything needed to cont
 | Repo | https://github.com/felsenheim/OpenStudio3D (public, branch `main`) |
 | Live site (GitHub Pages, deployed from `main` / root) | https://felsenheim.github.io/OpenStudio3D/ |
 | Sensor station (mouse input for now) | https://felsenheim.github.io/OpenStudio3D/sensor/ |
-| AR station (to build next) | https://felsenheim.github.io/OpenStudio3D/ar/ |
+| AR station (MindAR; card: `ar/card.pdf`) | https://felsenheim.github.io/OpenStudio3D/ar/ |
 | Brief and plan | Claude project "VR/XR experiance": `claude/task-brief.md`, `claude/work-plan.md` |
 
 ## Files
