@@ -31,7 +31,7 @@ export async function loadTangibleModel(url, {
   flatColor = 0x2f4a6b,  // flat mode: a mid-tone shows the facet contrast best (white washes out)
   flatKeyLight = 4,    // flat mode: strength of the directional key light that brings out the facets
   flatEnv = 0.08,        // flat mode: how much of the soft room light is kept (lower = more contrast)
-  smoothColor = 0xe6e6e6, // smooth mode (AO + normal map): off-white, 10% grey
+  smoothColor = 0xd9d9d9, // smooth mode (AO + normal map): 15% grey
   smoothAO = 1.6,         // smooth mode: AO strength (1 = as baked; higher = deeper creases)
   onProgress,
 } = {}) {

@@ -34,14 +34,14 @@ URL options: `?debug` shows the overlay on load; `?model=path/to/other.glb` load
 | Yaw | Mode |
 |---|---|
 | 300°–60° (around 0°) | Flat-shaded solid in deep steel blue with a raking key light, no textures (colour + light tunable in the debug overlay) |
-| 60°–180° (around 120°) | Smooth off-white (`#e6e6e6`) + baked AO at strength 1.6 + normal map (used automatically once the GLB has one) |
+| 60°–180° (around 120°) | Smooth 15% grey (`#d9d9d9`) + baked AO at strength 1.6 + normal map (used automatically once the GLB has one) |
 | 180°–300° (around 240°) | Original GLB material (full PBR) |
 
 ## Settings to tune (in `sensor/index.html`)
 - `frontYawDeg`: rotates the model so its front faces the screen at yaw 0.
 - `flatColor`, `flatKeyLight`, `flatEnv`: look of the flat mode (default `0x2f4a6b`, 4, 0.08). Try values live in the debug overlay, then copy them here.
 - `background`: circular falloff `{ center: '#ffffff', edge: '#666666', hold: 35, size: 100 }`; `hold` = how far pure white extends, `size` = where the edge colour is reached (both in % of the distance from the centre to the corners).
-- `smoothColor`, `smoothAO`: look of the smooth mode (default `0xe6e6e6` = 10% grey, AO strength 1.6). Both are adjustable live in the debug overlay.
+- `smoothColor`, `smoothAO`: look of the smooth mode (default `0xd9d9d9` = 15% grey, AO strength 1.6). Both are adjustable live in the debug overlay.
 - `smooth`: SMOOTH, default 12. Higher is snappier, lower is calmer. It can also be tried live with the slider in the debug overlay.
 
 ## Updating the live site
