@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tangible Interface · Sensor station</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #2a2a2a; overflow: hidden; }
+    #view { position: fixed; inset: 0; }
+    #status { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      color: #ccc; font: 15px system-ui, sans-serif; background: rgba(0,0,0,.5);
+      padding: 8px 14px; border-radius: 6px; pointer-events: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="status">Loading model…</div>
+
+  <script type="module">
+    import { loadTangibleModel, createScreenViewer, createDebugOverlay } from '../shared/viewer.js';
+    import { attachMouseInput } from '../shared/mouse-input.js';
+
+    const params = new URLSearchParams(location.search);
+    const status = document.getElementById('status');
+
+    try {
+      const model = await loadTangibleModel(params.get('model') || '../models/head.glb', {
+        frontYawDeg: 0,   // change if the model's front isn't facing the screen at yaw 0
+        smooth: 12,
+        onProgress: (e) => { if (e.total) status.textContent = `Loading model… ${Math.round(e.loaded / e.total * 100)}%`; },
+      });
+      const viewer = createScreenViewer(document.getElementById('view'), model);
+      createDebugOverlay(model, viewer, { visible: params.has('debug') });
+
+      // Phase 1: mouse input. Phase 2 adds the game controller here.
+      attachMouseInput(viewer.renderer.domElement, model);
+
+      status.textContent = 'Drag to turn · D = debug';
+      setTimeout(() => { status.style.display = 'none'; }, 4000);
+      window.model = model; // handy for testing in the console
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'Could not load the model: ' + err.message;
+    }
+  </script>
+</body>
+</html>
