@@ -1,6 +1,6 @@
 # OpenStudio3D: AR station, all values
 
-State as of 16 Nov 2026 (commit `f759357`). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
+State as of 16 Nov 2026 (pose smoothing added). Everything needed to run, tune or rebuild the AR experience. Shared viewer values (materials, lights, modes) are in `docs/viewer-settings.md`.
 
 ## Links
 | What | Where |
@@ -79,6 +79,20 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 | `uiLoading` / `uiScanning` / `uiError` | `no` (the page shows its own messages) | |
 | Camera | rear camera (`facingMode: environment`), chosen by MindAR | |
 
+## Pose smoothing (on top of the MindAR filter)
+MindAR writes the raw card pose into `anchor.group.matrix`. The model hangs on a separate group (`card`) that follows it:
+1. **Dead zone:** a new pose is only accepted once it differs from the last accepted one by more than **3 mm** or **1.5°**. With a still camera the model stays completely still.
+2. **Easing:** `card` moves toward the accepted pose with `lerp` / `slerp`, factor `1 − exp(−SMOOTH · dt)`, **SMOOTH = 10** (frame-rate independent, same as the sensor station).
+3. When the card is found again after being lost, the pose snaps (no easing from the old position).
+
+| Setting | Default | URL override |
+|---|---|---|
+| SMOOTH | 10 (higher = snappier, 0 = off) | `?smooth=` |
+| Dead zone, position | 3 mm | `?dpos=` |
+| Dead zone, rotation | 1.5° | `?drot=` |
+
+Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter at the top of the model 2.1 px → 0.4 px on average; biggest single jump 8.7 px → 1.2 px. A dead zone of 2 mm / 1° only gave about 20 % less, so 3 mm / 1.5° is the default. Trade-off: during slow movement the model can sit up to 3 mm / 1.5° off before catching up.
+
 ## Placement of the model
 | Item | Value |
 |---|---|
@@ -95,7 +109,8 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 - Each frame the camera position is transformed into card space (inverse anchor matrix).
 - **Azimuth** = `atan2(−x, −y)` in degrees, 0–360: **0° = standing at the front arrow**, increasing **clockwise seen from above** (= walking to your left). Same sense as yaw on the sensor station.
 - **Elevation** = `atan2(z, √(x² + y²))` (shown in the debug overlay only).
-- `model.forcedMode = modeForYaw(azimuth)`, hard switch:
+- The azimuth is read from the smoothed pose.
+- `model.forcedMode = modeForYaw(azimuth)` with **hysteresis of 6°** (`?hyst=`): the mode only changes once the azimuth is 6° past a border, so jitter at a border can't make the shading flicker. Zones:
 
 | Azimuth | Where you stand | Mode |
 |---|---|---|
@@ -126,13 +141,17 @@ tools/compile-target.html  compiles ar/target.png into target.mind in the browse
 ## URL options
 | Option | Default | Effect |
 |---|---|---|
-| `?debug` | off | overlay: card found, azimuth, elevation, mode, fps |
+| `?debug` | off | overlay: card found, azimuth, elevation, mode, % of frames held by the dead zone, smoothing values, fps |
+| `?smooth=` | 10 | easing speed of the pose (0 = off) |
+| `?dpos=` | 3 | dead zone for position (mm) |
+| `?drot=` | 1.5 | dead zone for rotation (°) |
+| `?hyst=` | 6 | mode-border hysteresis (°) |
 | `?height=` | 120 | model height on the card in mm |
 | `?cf=` | 0.0005 | MindAR `filterMinCF` |
 | `?beta=` | 10 | MindAR `filterBeta` |
 | `?model=` | `../models/head.glb` | another GLB |
 
-Example: `…/ar/?debug&height=90&cf=0.0001&beta=5`
+Example: `…/ar/?debug&height=90&dpos=4&drot=2&smooth=6`
 
 ## Devices
 - iPhone / iPad: Safari or Chrome (both use WebKit on iOS). Android: Chrome.
