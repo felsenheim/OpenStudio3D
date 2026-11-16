@@ -45,14 +45,17 @@
     const params = new URLSearchParams(location.search);
     const num = (k, d) => (params.has(k) ? +params.get(k) : d);
     const TARGET_MM = 190;                 // width of target.png on paper (184 mm circle + 3 mm margin each side)
-    const HEIGHT_MM = num('height', 120);  // model height on the card [?height=]
     const FILTER_MIN_CF = num('cf', 0.0005);   // MindAR one-euro filter: lower = calmer when still [?cf=]
     const FILTER_BETA = num('beta', 10);       // higher = less lag when moving [?beta=]
     // Our own pose smoothing on top of MindAR (same idea as the sensor station's SMOOTH):
-    const SMOOTH = num('smooth', 10);          // easing speed toward the tracked pose; 0 = off [?smooth=]
-    const DEAD_MM = num('dpos', 3);            // ignore position changes smaller than this (mm) [?dpos=]
-    const DEAD_DEG = num('drot', 1.5);          // ignore rotation changes smaller than this (deg) [?drot=]
-    const MODE_HYST = num('hyst', 6);          // degrees past a mode border before the mode switches [?hyst=]
+    // All of these can also be changed live in the Tune panel (?debug).
+    const tune = {
+      dpos: num('dpos', 3),        // dead zone: ignore position changes smaller than this (mm)
+      drot: num('drot', 1.5),      // dead zone: ignore rotation changes smaller than this (deg)
+      smooth: num('smooth', 10),   // easing speed toward the tracked pose; 0 = off
+      hyst: num('hyst', 6),        // degrees past a mode border before the mode switches
+      height: num('height', 120),  // model height on the card (mm)
+    };
     const DEG = 180 / Math.PI;
 
     const status = document.getElementById('status');
@@ -83,7 +86,8 @@
     model.root.position.y = -box.min.y;                       // base on the card plane
     const placed = new THREE.Group();
     placed.rotation.x = Math.PI / 2;
-    placed.scale.setScalar((HEIGHT_MM / TARGET_MM) / height); // real-world size
+    const setHeight = (mm) => placed.scale.setScalar((mm / TARGET_MM) / height); // real-world size
+    setHeight(tune.height);
     placed.add(standing);
 
     // ---- MindAR --------------------------------------------------------------
@@ -133,21 +137,21 @@
         return;
       }
       // Dead zone: only accept a new pose once it differs enough from the held one.
-      const moved = raw.p.distanceTo(held.p) / mm > DEAD_MM || held.q.angleTo(raw.q) * DEG > DEAD_DEG;
+      const moved = raw.p.distanceTo(held.p) / mm > tune.dpos || held.q.angleTo(raw.q) * DEG > tune.drot;
       if (moved) { held.p.copy(raw.p); held.q.copy(raw.q); } else stats.held++;
       stats.frames++;
       // Easing toward the held pose (frame-rate independent).
-      const k = SMOOTH > 0 ? 1 - Math.exp(-SMOOTH * dt) : 1;
+      const k = tune.smooth > 0 ? 1 - Math.exp(-tune.smooth * dt) : 1;
       card.position.lerp(held.p, k);
       card.quaternion.slerp(held.q, k);
       card.scale.copy(raw.s);
     }
 
-    // Mode with hysteresis: switch only once the azimuth is MODE_HYST degrees past a border.
+    // Mode with hysteresis: switch only once the azimuth is tune.hyst degrees past a border.
     function modeWithHysteresis(az, current) {
       const m = modeForYaw(az);
       if (m === current || current < 0) return m;
-      return modeForYaw(az - MODE_HYST) === m && modeForYaw(az + MODE_HYST) === m ? m : current;
+      return modeForYaw(az - tune.hyst) === m && modeForYaw(az + tune.hyst) === m ? m : current;
     }
 
     function updateViewAngle() {
@@ -158,15 +162,71 @@
       view.elevation = Math.atan2(cam.z, Math.hypot(cam.x, cam.y)) * DEG;
     }
 
-    // ---- debug (?debug) ------------------------------------------------------
+    // ---- debug overlay + Tune panel (?debug) ------------------------------------
     let debugEl = null;
     if (params.has('debug')) {
       debugEl = document.createElement('div');
       debugEl.style.cssText = `position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:6;
         padding:8px 10px;background:rgba(0,0,0,.6);color:#eee;font:12px/1.5 ui-monospace,monospace;border-radius:6px`;
       document.body.appendChild(debugEl);
+
+      const sliders = [
+        ['dpos', 'Dead zone', 'mm', 0, 10, 0.5],
+        ['drot', 'Dead zone', '°', 0, 5, 0.25],
+        ['smooth', 'Smooth', '', 0, 30, 1],
+        ['hyst', 'Mode hysteresis', '°', 0, 20, 1],
+        ['height', 'Model height', 'mm', 40, 180, 5],
+      ];
+      const btn = document.createElement('button');
+      btn.textContent = 'Tune';
+      btn.style.cssText = `position:fixed;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:7;
+        font:600 16px system-ui,sans-serif;padding:10px 16px;border:0;border-radius:8px;background:#eee;color:#111`;
+      const panel = document.createElement('div');
+      panel.style.cssText = `position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:7;
+        display:none;padding:12px 14px;background:rgba(0,0,0,.75);color:#eee;font:15px/1.3 system-ui,sans-serif;border-radius:10px`;
+      panel.innerHTML = sliders.map(([k, label, unit, min, max, step]) => `
+        <label style="display:block;margin:6px 0">${label} <b data-v="${k}"></b> ${unit}
+          <input data-k="${k}" type="range" min="${min}" max="${max}" step="${step}" style="width:100%;height:28px"></label>`).join('') + `
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button data-a="copy" style="flex:1;font:inherit;padding:10px;border:0;border-radius:6px">Copy link with these values</button>
+          <button data-a="reset" style="font:inherit;padding:10px;border:0;border-radius:6px">Reset</button>
+        </div>
+        <div data-a="url" style="margin-top:6px;font:11px ui-monospace,monospace;word-break:break-all;opacity:.8"></div>`;
+      document.body.append(btn, panel);
+      btn.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; };
+
+      const link = () => {
+        const u = new URL(location.href);
+        for (const [k] of sliders) u.searchParams.set(k, tune[k]);
+        u.searchParams.set('debug', '');
+        return u.toString().replace('debug=&', 'debug&').replace(/debug=$/, 'debug');
+      };
+      const show = () => {
+        for (const [k] of sliders) {
+          panel.querySelector(`[data-k="${k}"]`).value = tune[k];
+          panel.querySelector(`[data-v="${k}"]`).textContent = tune[k];
+        }
+        panel.querySelector('[data-a="url"]').textContent = link();
+      };
+      panel.addEventListener('input', (e) => {
+        const k = e.target.dataset.k; if (!k) return;
+        tune[k] = +e.target.value;
+        if (k === 'height') setHeight(tune.height);
+        show();
+      });
+      panel.querySelector('[data-a="copy"]').onclick = async (e) => {
+        try { await navigator.clipboard.writeText(link()); e.target.textContent = 'Copied ✓'; }
+        catch { e.target.textContent = 'Copy failed: select the link below'; }
+        setTimeout(() => { e.target.textContent = 'Copy link with these values'; }, 2000);
+      };
+      panel.querySelector('[data-a="reset"]').onclick = () => {
+        Object.assign(tune, { dpos: 3, drot: 1.5, smooth: 10, hyst: 6, height: 120 });
+        setHeight(tune.height); show();
+      };
+      show();
+      window.tune = tune;
     }
-    let acc = 0, frames = 0, fps = 0;
+    let acc = 0, frames = 0, fps = 0, heldPct = 0;
 
     // ---- start ---------------------------------------------------------------
     async function start() {
@@ -194,13 +254,13 @@
         renderer.render(scene, camera);
         if (debugEl) {
           acc += dt; frames++;
-          if (acc > 0.5) { fps = frames / acc; acc = 0; frames = 0; }
+          if (acc > 0.5) { fps = frames / acc; acc = 0; frames = 0; heldPct = stats.frames ? Math.round(100 * stats.held / stats.frames) : 0; stats.held = stats.frames = 0; }
           debugEl.innerHTML = `card ${found ? 'found' : 'not found'}<br>` +
             `azimuth ${view.azimuth.toFixed(1).padStart(6)}°<br>` +
             `elevation ${view.elevation.toFixed(1).padStart(4)}°<br>` +
             `mode ${model.mode}: ${MODES[model.mode]}<br>` +
-            `held ${stats.frames ? Math.round(100 * stats.held / stats.frames) : 0}% of frames<br>` +
-            `smooth ${SMOOTH} · dead ${DEAD_MM} mm / ${DEAD_DEG}°<br>${fps.toFixed(0)} fps`;
+            `held ${heldPct}% of frames (dead zone)<br>` +
+            `${fps.toFixed(0)} fps`;
         }
       });
     }

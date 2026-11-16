@@ -141,7 +141,7 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 ## URL options
 | Option | Default | Effect |
 |---|---|---|
-| `?debug` | off | overlay: card found, azimuth, elevation, mode, % of frames held by the dead zone, smoothing values, fps |
+| `?debug` | off | overlay (card found, azimuth, elevation, mode, % of frames held by the dead zone in the last 0.5 s, fps) + **Tune** button |
 | `?smooth=` | 10 | easing speed of the pose (0 = off) |
 | `?dpos=` | 3 | dead zone for position (mm) |
 | `?drot=` | 1.5 | dead zone for rotation (°) |
@@ -152,6 +152,9 @@ Measured with a simulated, slightly shaking camera (±1.5 mm, ±0.4°): jitter a
 | `?model=` | `../models/head.glb` | another GLB |
 
 Example: `…/ar/?debug&height=90&dpos=4&drot=2&smooth=6`
+
+### Tune panel (`?debug`, then the **Tune** button)
+Live sliders, no reload needed: dead zone mm (0–10), dead zone ° (0–5), smooth (0–30), mode hysteresis ° (0–20), model height mm (40–180). **Copy link with these values** puts the current settings into a URL (also shown under the buttons); **Reset** returns to the defaults. The MindAR filter (`cf`, `beta`) is set when the camera starts, so it stays a URL option.
 
 ## Devices
 - iPhone / iPad: Safari or Chrome (both use WebKit on iOS). Android: Chrome.
