@@ -26,7 +26,7 @@
     <!-- No camera-controls: no mouse orbit, zoom or pan from model-viewer itself.
          The page sets camera-orbit from the input (mouse now, game controller in phase 2). -->
     <model-viewer id="mv"
-      src="../../models/head.glb"
+      src="../../models/flower_02.glb"
       alt="3D model"
       environment-image="neutral"
       tone-mapping="neutral"
@@ -51,7 +51,7 @@
     import { attachMouseInput } from '../../shared/mouse-input.js?v=10';
 
     // --- settings ---
-    const FRONT_YAW_DEG = 90;  // offset so the model's front (the face) looks at the screen at yaw 0
+    const FRONT_YAW_DEG = 90;  // offset so the model's front looks at the screen at yaw 0 (90 = the figure's face; the flower is nearly symmetric)
     const params = new URLSearchParams(location.search);
 
     const mv = document.getElementById('mv');

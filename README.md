@@ -1,6 +1,6 @@
 # Tangible Interface
 
-> **New: model-viewer version** in `mv/` (full PBR only). `mv/sensor/index.html`: `<model-viewer>` 4.4.0 without camera-controls; yaw / pitch set `camera-orbit` (theta = −(yaw + FRONT_YAW_DEG), phi = 90° + pitch), smoothing via `interpolation-decay` (100 ms), `environment-image="neutral"`, `tone-mapping="neutral"`, `field-of-view="30deg"`, same background gradient and mouse input as below. Debug overlay: `D` / `?debug`. The three.js version described below stays live; snapshot in branch `threejs-v1`.
+> **New: model-viewer version** in `mv/` (full PBR only). `mv/sensor/index.html` (default model `models/flower_02.glb`; the figure: `?model=../../models/head.glb`): `<model-viewer>` 4.4.0 without camera-controls; yaw / pitch set `camera-orbit` (theta = −(yaw + FRONT_YAW_DEG), phi = 90° + pitch), smoothing via `interpolation-decay` (100 ms), `environment-image="neutral"`, `tone-mapping="neutral"`, `field-of-view="30deg"`, same background gradient and mouse input as below. Debug overlay: `D` / `?debug`. The three.js version described below stays live; snapshot in branch `threejs-v1`.
 
 A three.js viewer on GitHub Pages: turn a physical object (sensor station) or walk around a printed card (AR station), and the 3D model turns with it.
 
