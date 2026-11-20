@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenStudio3D · Sensor station (model-viewer)</title>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.4.0/dist/model-viewer.min.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #666666; }
+    /* Circular falloff: white in the centre (held for the first 35%), grey #666666 at the corners. */
+    #stage { position: fixed; inset: 0;
+      background: radial-gradient(circle farthest-corner at 50% 50%, #ffffff 0%, #ffffff 35%, #666666 100%); }
+    model-viewer { width: 100%; height: 100%; background-color: transparent;
+      --poster-color: transparent; --progress-bar-color: transparent; touch-action: none; }
+    #status { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      color: #eee; font: 15px system-ui, sans-serif; background: rgba(0,0,0,.5);
+      padding: 8px 14px; border-radius: 6px; pointer-events: none; }
+    #debug { position: fixed; top: 12px; left: 12px; z-index: 10; padding: 10px 12px;
+      background: rgba(0,0,0,.65); color: #eee; font: 12px/1.5 ui-monospace, monospace;
+      border-radius: 6px; min-width: 220px; display: none; }
+    #debug input[type=range] { width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <!-- No camera-controls: no mouse orbit, zoom or pan from model-viewer itself.
+         The page sets camera-orbit from the input (mouse now, game controller in phase 2). -->
+    <model-viewer id="mv"
+      src="../../models/head.glb"
+      alt="3D model"
+      environment-image="neutral"
+      tone-mapping="neutral"
+      shadow-intensity="0"
+      field-of-view="30deg"
+      camera-orbit="0deg 90deg 100%"
+      min-camera-orbit="-Infinity 0deg auto"
+      max-camera-orbit="Infinity 180deg auto"
+      interpolation-decay="100"
+      interaction-prompt="none">
+    </model-viewer>
+  </div>
+  <div id="status">Loading model…</div>
+  <div id="debug">
+    <div id="dbgText"></div>
+    <label style="display:block;margin-top:6px">smoothing (interpolation-decay) <span id="decayVal"></span> ms
+      <input id="decay" type="range" min="0" max="400" step="10"></label>
+    <div style="opacity:.6;margin-top:6px">D = hide</div>
+  </div>
+
+  <script type="module">
+    import { attachMouseInput } from '../../shared/mouse-input.js?v=10';
+
+    // --- settings ---
+    const FRONT_YAW_DEG = 90;  // offset so the model's front (the face) looks at the screen at yaw 0
+    const params = new URLSearchParams(location.search);
+
+    const mv = document.getElementById('mv');
+    const status = document.getElementById('status');
+    if (params.get('model')) mv.src = params.get('model');
+
+    // Same convention as the three.js version:
+    //   yaw +   = the model turns so its front moves to the right on screen
+    //   pitch + = the front tilts up (you see more of the underside)
+    // model-viewer moves the camera instead of the model, so the angles are mirrored:
+    //   theta (around the model) = -yaw,  phi (from straight above) = 90° + pitch
+    let target = { yaw: 0, pitch: 0 };
+    const station = {
+      setTargetOrientation(yaw, pitch) {
+        target = { yaw, pitch };
+        const theta = -(yaw + FRONT_YAW_DEG);
+        const phi = Math.max(0, Math.min(180, 90 + pitch));
+        mv.cameraOrbit = `${theta}deg ${phi}deg 100%`;
+      },
+    };
+    station.setTargetOrientation(0, 0);
+
+    // Phase 1: mouse input (drag, arrow keys, 0 = reset). Phase 2 adds the game controller here.
+    attachMouseInput(mv, station);
+
+    // --- loading messages ---
+    mv.addEventListener('progress', (e) => {
+      const p = e.detail.totalProgress;
+      if (p < 1) status.textContent = `Loading model… ${Math.round(p * 100)}%`;
+    });
+    mv.addEventListener('load', () => {
+      status.textContent = 'Drag to turn · D = debug';
+      setTimeout(() => { status.style.display = 'none'; }, 4000);
+    });
+    mv.addEventListener('error', (e) => {
+      status.textContent = 'Could not load the model.';
+      console.error(e);
+    });
+
+    // --- debug overlay (D key or ?debug) ---
+    const dbg = document.getElementById('debug');
+    const decay = document.getElementById('decay');
+    decay.value = mv.interpolationDecay;
+    decay.oninput = () => { mv.interpolationDecay = +decay.value; };
+    if (params.has('debug')) dbg.style.display = 'block';
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'd' || e.key === 'D') dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none';
+    });
+    let frames = 0, last = performance.now(), fps = 0;
+    (function loop(now) {
+      frames++;
+      if (now - last > 500) { fps = frames * 1000 / (now - last); frames = 0; last = now; }
+      if (dbg.style.display !== 'none') {
+        const o = mv.getCameraOrbit();   // the smoothed (displayed) orbit
+        const yaw = ((-o.theta * 180 / Math.PI - FRONT_YAW_DEG) % 360 + 360) % 360;
+        const pitch = o.phi * 180 / Math.PI - 90;
+        document.getElementById('dbgText').innerHTML =
+          `yaw   ${yaw.toFixed(1).padStart(6)}°  (target ${target.yaw.toFixed(0)}°)<br>` +
+          `pitch ${pitch.toFixed(1).padStart(6)}°  (target ${target.pitch.toFixed(0)}°)<br>` +
+          `${fps.toFixed(0)} fps`;
+        document.getElementById('decayVal').textContent = mv.interpolationDecay;
+      }
+      requestAnimationFrame(loop);
+    })(performance.now());
+
+    window.mv = mv; window.station = station;   // handy for testing in the console
+  </script>
+</body>
+</html>

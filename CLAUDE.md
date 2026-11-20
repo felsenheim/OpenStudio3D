@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+**Switching to Google model-viewer (20 Nov 2026), full PBR only.** New version in `mv/` (`mv/sensor/` built; `mv/ar/` next, AR Quick Look instead of card tracking). Plan: project doc `claude/model-viewer-plan.md`. The three.js version below stays live in `/sensor/` and `/ar/`; snapshot in branch `threejs-v1`.
+
 Project: Tangible Interface. three.js viewer on GitHub Pages with two stations (sensor `/sensor/`, AR `/ar/`) sharing `shared/viewer.js` and one GLB.
 Guiding principle: **keep it simple**: static files, no build tools, three.js 0.187.0 from jsDelivr via an import map.
 
