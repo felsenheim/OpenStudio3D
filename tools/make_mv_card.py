@@ -12,11 +12,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 URL = "https://felsenheim.github.io/OpenStudio3D/mv/ar/"
 TITLE = "OpenStudio3D · AR"
-HEADLINE = "A flower, 1.1 m wide"
+HEADLINE = "A flower, 60 cm wide"
 LINES = [
     "1  Scan the QR code with your phone camera.",
     "2  Tap “View in AR”.",
-    "3  Point the phone at the floor and step back about 2 m.",
+    "3  Point the phone at the floor or a table and step back about 1 m.",
 ]
 FOOTER = "iPhone / iPad: Safari · Android: Chrome · Allow the camera when asked."
 

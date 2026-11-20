@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Switching to Google model-viewer (20 Nov 2026), full PBR only.** New version in `mv/`: `mv/sensor/` (mouse input; game controller in phase 2) and `mv/ar/` (model-viewer AR: Quick Look on iOS, WebXR / Scene Viewer on Android, `ar-scale="fixed"` = real size, flower 1.1 m; QR sheet `mv/ar/card.pdf` from `tools/make_mv_card.py`). Default model: `models/flower_02.glb`. Plan: project doc `claude/model-viewer-plan.md`. The three.js version below stays live in `/sensor/` and `/ar/`; snapshot in branch `threejs-v1`.
+**Switching to Google model-viewer (20 Nov 2026), full PBR only.** New version in `mv/`: `mv/sensor/` (mouse input; game controller in phase 2) and `mv/ar/` (model-viewer AR: Quick Look on iOS, WebXR / Scene Viewer on Android, `ar-scale="fixed"` = real size, flower about 60 cm; QR sheet `mv/ar/card.pdf` from `tools/make_mv_card.py`). Default model: `models/flower_03.glb`. Plan: project doc `claude/model-viewer-plan.md`. The three.js version below stays live in `/sensor/` and `/ar/`; snapshot in branch `threejs-v1`.
 
 Project: Tangible Interface. three.js viewer on GitHub Pages with two stations (sensor `/sensor/`, AR `/ar/`) sharing `shared/viewer.js` and one GLB.
 Guiding principle: **keep it simple**: static files, no build tools, three.js 0.187.0 from jsDelivr via an import map.

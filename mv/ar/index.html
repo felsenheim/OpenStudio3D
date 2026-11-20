@@ -24,11 +24,11 @@
 </head>
 <body>
   <div id="stage">
-    <!-- ar-scale="fixed": the model appears at its real size (1 unit in the GLB = 1 m; the flower is about 1.1 m across).
+    <!-- ar-scale="fixed": the model appears at its real size (1 unit in the GLB = 1 m; the flower is about 60 cm across).
          On iPhone/iPad model-viewer opens Apple AR Quick Look (it builds the USDZ from the GLB);
          on Android it uses WebXR or Google Scene Viewer. -->
     <model-viewer id="mv"
-      src="../../models/flower_02.glb"
+      src="../../models/flower_03.glb"
       alt="3D scan of a flower"
       ar
       ar-modes="webxr scene-viewer quick-look"
@@ -44,7 +44,7 @@
       shadow-intensity="1"
       field-of-view="30deg"
       camera-orbit="0deg 70deg 100%">
-      <button slot="ar-button" id="arButton">View in AR · 1.1 m</button>
+      <button slot="ar-button" id="arButton">View in AR · real size</button>
     </model-viewer>
   </div>
   <div id="info"><b>Loading…</b></div>
@@ -61,7 +61,7 @@
     });
     mv.addEventListener('load', () => {
       if (mv.canActivateAR) {
-        info.innerHTML = '<b>Real size: about 1.1 m across</b>Tap “View in AR”, point the phone at the floor and step back about 2 m.';
+        info.innerHTML = '<b>Real size: about 60 cm across</b>Tap “View in AR”, point the phone at the floor or a table and step back about 1 m.';
       } else {
         info.innerHTML = '<b>AR needs a phone or tablet</b>Open this page on an iPhone, iPad or Android phone. Here you can turn the model with the mouse.';
         document.getElementById('arButton').style.display = 'none';
