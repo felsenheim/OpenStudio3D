@@ -2,11 +2,11 @@
 // Adafruit Feather ESP32-S3 (5323, No PSRAM) + BNO085 (4754) via STEMMA QT, wired USB.
 //
 // The board shows up as a USB game controller. The browser page /mv/sensor/
-// reads it with the Gamepad API:
-//   stick X (axis 0) = yaw    (-180..180 deg -> -127..127)
-//   stick Y (axis 1) = pitch  ( -90..90  deg -> -127..127)
-//   Z                = roll   (-180..180 deg -> -127..127, not used by the page; for axis checks)
-//   button 0         = BOOT button (Zero / wake the browser)
+// reads it with the Gamepad API. The axes carry the full orientation
+// (game rotation vector, world z up) as a rotation vector:
+//   v = axis * angle / 180deg   (|v| <= 1, about 1.4 deg per step in every pose)
+//   X (axis 0) = vx, Y (axis 1) = vy, Z (axis 2) = vz   (-1..1 -> -127..127)
+//   button 0 = BOOT button (Zero / wake the browser)
 // Serial (USB CDC, 115200) prints yaw / pitch / roll, data rate and sensor restarts.
 //
 // Arduino IDE, Tools:
@@ -38,6 +38,7 @@ Adafruit_BNO08x bno(-1);             // no reset pin wired
 sh2_SensorValue_t ev;
 
 float yaw = 0, pitch = 0, roll = 0;
+float qw = 1, qx = 0, qy = 0, qz = 0;
 uint32_t lastEventMs = 0, lastPrintMs = 0, count = 0, restarts = 0;
 int8_t lastX = 0, lastY = 0, lastZ = 0;
 bool lastBtn = false;
@@ -48,8 +49,8 @@ bool startSensor() {
   return bno.enableReport(SH2_GAME_ROTATION_VECTOR, REPORT_US);
 }
 
-int8_t toAxis(float deg, float range) {      // +-range deg -> -127..127
-  float v = deg / range * 127.0f;
+int8_t toAxis(float v1) {                    // -1..1 -> -127..127
+  float v = v1 * 127.0f;
   if (v > 127) v = 127;
   if (v < -127) v = -127;
   return (int8_t)lroundf(v);
@@ -85,6 +86,8 @@ void loop() {
     float s = 2 * (w * y - z * x);
     pitch = degrees(asinf(constrain(s, -1.0f, 1.0f)));
     roll  = degrees(atan2f(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)));
+    if (w < 0) { w = -w; x = -x; y = -y; z = -z; }   // q and -q are the same rotation
+    qw = w; qx = x; qy = y; qz = z;
     count++;
     lastEventMs = millis();
   }
@@ -97,7 +100,11 @@ void loop() {
   }
 
   // Gamepad report: only send when something changed
-  int8_t gx = toAxis(yaw, 180), gy = toAxis(pitch, 90), gz = toAxis(roll, 180);
+  // quaternion (w >= 0) -> rotation vector / pi
+  float sh = sqrtf(qx * qx + qy * qy + qz * qz);            // sin(angle / 2)
+  float ang = 2.0f * atan2f(sh, qw);                          // 0..pi
+  float k = sh > 1e-6f ? ang / (float)PI / sh : 0.0f;
+  int8_t gx = toAxis(qx * k), gy = toAxis(qy * k), gz = toAxis(qz * k);
   bool btn = digitalRead(ZERO_BUTTON_PIN) == LOW;
   if (gx != lastX || gy != lastY || gz != lastZ || btn != lastBtn) {
     // send(x, y, z, rz, rx, ry, hat, buttons)

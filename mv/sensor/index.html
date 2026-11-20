@@ -23,8 +23,9 @@
 </head>
 <body>
   <div id="stage">
-    <!-- No camera-controls: no mouse orbit, zoom or pan from model-viewer itself.
-         The page sets camera-orbit from the input (mouse now, game controller in phase 2). -->
+    <!-- No camera-controls: the camera stays fixed in front of the model.
+         The page rotates the model itself (model-viewer's scene pivot) from the input:
+         mouse for development, the tangible controller (full 3D orientation) in use. -->
     <model-viewer id="mv"
       src="../../models/flower_03.glb"
       alt="3D model"
@@ -33,53 +34,69 @@
       shadow-intensity="0"
       field-of-view="30deg"
       camera-orbit="0deg 90deg 100%"
-      min-camera-orbit="-Infinity 0deg auto"
-      max-camera-orbit="Infinity 180deg auto"
-      interpolation-decay="100"
       interaction-prompt="none">
     </model-viewer>
   </div>
   <div id="status">Loading model…</div>
   <div id="debug">
     <div id="dbgText"></div>
-    <label style="display:block;margin-top:6px">smoothing (interpolation-decay) <span id="decayVal"></span> ms
-      <input id="decay" type="range" min="0" max="400" step="10"></label>
-    <div style="opacity:.6;margin-top:6px">D = hide</div>
+    <label style="display:block;margin-top:6px">smoothing (SMOOTH) <span id="smoothVal"></span>
+      <input id="smooth" type="range" min="0" max="30" step="1"></label>
+    <div style="opacity:.6;margin-top:6px">D = hide · Z = zero controller</div>
   </div>
 
   <script type="module">
     import { attachMouseInput } from '../../shared/mouse-input.js?v=10';
-    import { attachGamepadInput } from '../../shared/gamepad-input.js?v=1';
+    import { attachGamepadInput } from '../../shared/gamepad-input.js?v=3';
+    import { qMul, qAxisAngle, qSlerp, qYawPitch } from '../../shared/quat.js?v=1';
 
     // --- settings ---
-    const FRONT_YAW_DEG = 90;  // offset so the model's front looks at the screen at yaw 0 (90 = the figure's face; the flower is nearly symmetric)
+    const FRONT_YAW_DEG = 90;  // turns the model so its front looks at the screen at rest (90 = the figure's face; the flower is nearly symmetric)
     const params = new URLSearchParams(location.search);
+    let SMOOTH = +(params.get('smooth') ?? 12);   // slerp toward the target: 1 - exp(-SMOOTH * dt); 0 = no smoothing
 
     const mv = document.getElementById('mv');
     const status = document.getElementById('status');
     if (params.get('model')) mv.src = params.get('model');
 
-    // Same convention as the three.js version:
+    // The model is rotated with a quaternion on model-viewer's internal scene pivot,
+    // which turns it around its centre. This allows any orientation (full 360° in
+    // every direction); the camera never moves.
+    // Convention (same as the three.js version), screen axes x right, y up, z toward you:
     //   yaw +   = the model turns so its front moves to the right on screen
     //   pitch + = the front tilts up (you see more of the underside)
-    // model-viewer moves the camera instead of the model, so the angles are mirrored:
-    //   theta (around the model) = -yaw,  phi (from straight above) = 90° + pitch
-    let target = { yaw: 0, pitch: 0 };
+    const base = qAxisAngle(0, 1, 0, FRONT_YAW_DEG);
+    let target = [0, 0, 0, 1], current = [0, 0, 0, 1];
     const station = {
-      setTargetOrientation(yaw, pitch) {
-        target = { yaw, pitch };
-        const theta = -(yaw + FRONT_YAW_DEG);
-        const phi = Math.max(0, Math.min(180, 90 + pitch));
-        mv.cameraOrbit = `${theta}deg ${phi}deg 100%`;
+      setTargetQuaternion(q) { target = q; },
+      setTargetOrientation(yaw, pitch) {   // used by the mouse input
+        target = qMul(qAxisAngle(1, 0, 0, -pitch), qAxisAngle(0, 1, 0, yaw));
       },
     };
-    station.setTargetOrientation(0, 0);
+
+    let pivotScene = null;
+    function findScene() {
+      const sym = Object.getOwnPropertySymbols(mv).find((s) => s.description === 'scene');
+      const sc = sym && mv[sym];
+      return sc && sc.scenePivot ? sc : null;
+    }
+    function applyRotation(q) {
+      const r = qMul(q, base);
+      pivotScene ??= findScene();
+      if (pivotScene) {
+        pivotScene.scenePivot.quaternion.set(r[0], r[1], r[2], r[3]);
+        pivotScene.queueRender();
+      } else {                              // fallback: camera orbit (yaw / pitch only)
+        const { yaw, pitch } = qYawPitch(q);
+        mv.cameraOrbit = `${-(yaw + FRONT_YAW_DEG)}deg ${Math.max(0, Math.min(180, 90 + pitch))}deg 100%`;
+      }
+    }
 
     // Mouse input (drag, arrow keys, 0 = reset) for development; works when no controller is plugged in.
     attachMouseInput(mv, station);
 
-    // Game controller (firmware/tangible_controller). URL options:
-    //   ?flipyaw / ?flippitch  reverse a direction,  ?yawaxis=0&pitchaxis=1  pick other axes
+    // Game controller (firmware/tangible_controller): full orientation as a quaternion.
+    // URL option ?front=0|90|180|270: which side of the board faces you when you press Zero.
     let modelLoaded = false, padConnected = false;
     const showHint = () => {
       if (!modelLoaded) return;
@@ -89,19 +106,18 @@
       if (padConnected) setTimeout(() => { if (padConnected) status.style.display = 'none'; }, 2000);
     };
     const pad = attachGamepadInput(station, {
-      yawAxis: +(params.get('yawaxis') ?? 0),
-      pitchAxis: +(params.get('pitchaxis') ?? 1),
-      flipYaw: params.has('flipyaw'),
-      flipPitch: params.has('flippitch'),
+      front: +(params.get('front') ?? 0),
+      axes: (params.get('qaxes') ?? '0,1,2').split(',').map(Number),
       onStatus: (s) => { padConnected = s === 'connected'; showHint(); },
     });
+    window.addEventListener('keydown', (e) => { if (e.key === 'z' || e.key === 'Z') pad.zero(); });
 
     // --- loading messages ---
     mv.addEventListener('progress', (e) => {
       const p = e.detail.totalProgress;
       if (p < 1) status.textContent = `Loading model… ${Math.round(p * 100)}%`;
     });
-    mv.addEventListener('load', () => { modelLoaded = true; showHint(); });
+    mv.addEventListener('load', () => { modelLoaded = true; pivotScene = findScene(); showHint(); });
     mv.addEventListener('error', (e) => {
       status.textContent = 'Could not load the model.';
       console.error(e);
@@ -109,31 +125,38 @@
 
     // --- debug overlay (D key or ?debug) ---
     const dbg = document.getElementById('debug');
-    const decay = document.getElementById('decay');
-    decay.value = mv.interpolationDecay;
-    decay.oninput = () => { mv.interpolationDecay = +decay.value; };
+    const smooth = document.getElementById('smooth');
+    smooth.value = SMOOTH;
+    smooth.oninput = () => { SMOOTH = +smooth.value; };
     if (params.has('debug')) dbg.style.display = 'block';
     window.addEventListener('keydown', (e) => {
       if (e.key === 'd' || e.key === 'D') dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none';
     });
-    let frames = 0, last = performance.now(), fps = 0;
+
+    // --- frame loop: smoothing + debug ---
+    let frames = 0, lastFps = performance.now(), fps = 0, lastT = performance.now();
     (function loop(now) {
+      const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+      const next = SMOOTH > 0 ? qSlerp(current, target, 1 - Math.exp(-SMOOTH * dt)) : target;
+      if (Math.abs(next[0] - current[0]) + Math.abs(next[1] - current[1]) +
+          Math.abs(next[2] - current[2]) + Math.abs(next[3] - current[3]) > 1e-6 || !pivotScene) {
+        current = next;
+        applyRotation(current);
+      }
       frames++;
-      if (now - last > 500) { fps = frames * 1000 / (now - last); frames = 0; last = now; }
+      if (now - lastFps > 500) { fps = frames * 1000 / (now - lastFps); frames = 0; lastFps = now; }
       if (dbg.style.display !== 'none') {
-        const o = mv.getCameraOrbit();   // the smoothed (displayed) orbit
-        const yaw = ((-o.theta * 180 / Math.PI - FRONT_YAW_DEG) % 360 + 360) % 360;
-        const pitch = o.phi * 180 / Math.PI - 90;
+        const c = qYawPitch(current), t = qYawPitch(target);
         document.getElementById('dbgText').innerHTML =
-          `yaw   ${yaw.toFixed(1).padStart(6)}°  (target ${target.yaw.toFixed(0)}°)<br>` +
-          `pitch ${pitch.toFixed(1).padStart(6)}°  (target ${target.pitch.toFixed(0)}°)<br>` +
-          `${fps.toFixed(0)} fps<br>` +
+          `yaw   ${c.yaw.toFixed(1).padStart(6)}°  (target ${t.yaw.toFixed(0)}°)<br>` +
+          `pitch ${c.pitch.toFixed(1).padStart(6)}°  (target ${t.pitch.toFixed(0)}°)<br>` +
+          `${fps.toFixed(0)} fps · ${pivotScene ? 'model rotation' : 'camera fallback'}<br>` +
           (pad.state.connected
             ? `controller: ${pad.state.id.slice(0, 28)}<br>` +
               `axes ${pad.state.axes.slice(0, 4).map((a) => a.toFixed(2)).join(' ')}<br>` +
               `button ${pad.state.button ? 'DOWN' : 'up'}`
             : 'controller: none (press its button)');
-        document.getElementById('decayVal').textContent = mv.interpolationDecay;
+        document.getElementById('smoothVal').textContent = SMOOTH;
       }
       requestAnimationFrame(loop);
     })(performance.now());
