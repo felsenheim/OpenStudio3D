@@ -11,7 +11,7 @@ Full brief and plan: paste `task-brief.md` and `work-plan.md` into `docs/` (they
 
 ## Status
 - [x] Phase 1: shared viewer + mouse input (`/sensor/` uses the mouse for now)
-- [ ] Phase 2: game-controller input (ESP32-S3 + BNO085 as USB HID gamepad), Zero button, fullscreen
+- [ ] Phase 2: game-controller input (ESP32-S3 + BNO085 as USB HID gamepad), Zero button: firmware `firmware/tangible_controller/` + `shared/gamepad-input.js` in `mv/sensor/` written (20 Nov), waiting for the test with the real board; fullscreen still open
 - [ ] Phase 3: `/ar/` with MindAR image tracking: built and tested with a simulated camera; waiting for the on-device test (iPhone)
 - [ ] Phase 4: both stations together, kiosk setup
 

@@ -49,6 +49,7 @@
 
   <script type="module">
     import { attachMouseInput } from '../../shared/mouse-input.js?v=10';
+    import { attachGamepadInput } from '../../shared/gamepad-input.js?v=1';
 
     // --- settings ---
     const FRONT_YAW_DEG = 90;  // offset so the model's front looks at the screen at yaw 0 (90 = the figure's face; the flower is nearly symmetric)
@@ -74,18 +75,33 @@
     };
     station.setTargetOrientation(0, 0);
 
-    // Phase 1: mouse input (drag, arrow keys, 0 = reset). Phase 2 adds the game controller here.
+    // Mouse input (drag, arrow keys, 0 = reset) for development; works when no controller is plugged in.
     attachMouseInput(mv, station);
+
+    // Game controller (firmware/tangible_controller). URL options:
+    //   ?flipyaw / ?flippitch  reverse a direction,  ?yawaxis=0&pitchaxis=1  pick other axes
+    let modelLoaded = false, padConnected = false;
+    const showHint = () => {
+      if (!modelLoaded) return;
+      status.style.display = 'block';
+      status.textContent = padConnected ? 'Controller connected'
+        : 'Press the button on the controller to start';
+      if (padConnected) setTimeout(() => { if (padConnected) status.style.display = 'none'; }, 2000);
+    };
+    const pad = attachGamepadInput(station, {
+      yawAxis: +(params.get('yawaxis') ?? 0),
+      pitchAxis: +(params.get('pitchaxis') ?? 1),
+      flipYaw: params.has('flipyaw'),
+      flipPitch: params.has('flippitch'),
+      onStatus: (s) => { padConnected = s === 'connected'; showHint(); },
+    });
 
     // --- loading messages ---
     mv.addEventListener('progress', (e) => {
       const p = e.detail.totalProgress;
       if (p < 1) status.textContent = `Loading model… ${Math.round(p * 100)}%`;
     });
-    mv.addEventListener('load', () => {
-      status.textContent = 'Drag to turn · D = debug';
-      setTimeout(() => { status.style.display = 'none'; }, 4000);
-    });
+    mv.addEventListener('load', () => { modelLoaded = true; showHint(); });
     mv.addEventListener('error', (e) => {
       status.textContent = 'Could not load the model.';
       console.error(e);
@@ -111,7 +127,12 @@
         document.getElementById('dbgText').innerHTML =
           `yaw   ${yaw.toFixed(1).padStart(6)}°  (target ${target.yaw.toFixed(0)}°)<br>` +
           `pitch ${pitch.toFixed(1).padStart(6)}°  (target ${target.pitch.toFixed(0)}°)<br>` +
-          `${fps.toFixed(0)} fps`;
+          `${fps.toFixed(0)} fps<br>` +
+          (pad.state.connected
+            ? `controller: ${pad.state.id.slice(0, 28)}<br>` +
+              `axes ${pad.state.axes.slice(0, 4).map((a) => a.toFixed(2)).join(' ')}<br>` +
+              `button ${pad.state.button ? 'DOWN' : 'up'}`
+            : 'controller: none (press its button)');
         document.getElementById('decayVal').textContent = mv.interpolationDecay;
       }
       requestAnimationFrame(loop);

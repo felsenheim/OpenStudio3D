@@ -2,6 +2,13 @@
 
 > **New: model-viewer version** in `mv/` (full PBR only). `mv/sensor/index.html` (default model `models/flower_03.glb`; the figure: `?model=../../models/head.glb`): `<model-viewer>` 4.4.0 without camera-controls; yaw / pitch set `camera-orbit` (theta = −(yaw + FRONT_YAW_DEG), phi = 90° + pitch), smoothing via `interpolation-decay` (100 ms), `environment-image="neutral"`, `tone-mapping="neutral"`, `field-of-view="30deg"`, same background gradient and mouse input as below. Debug overlay: `D` / `?debug`. `mv/ar/index.html`: model-viewer AR (`ar-modes="webxr scene-viewer quick-look"`, `ar-scale="fixed"` so the flower shows at its real size, about 60 cm, `ar-placement="floor"`), 3D preview with drag-to-orbit; printable QR sheet `mv/ar/card.pdf` (rebuild: `python3 tools/make_mv_card.py`, needs `pillow qrcode`). The three.js version described below stays live; snapshot in branch `threejs-v1`.
 
+## Tangible controller (phase 2, `firmware/tangible_controller/`)
+Adafruit Feather ESP32-S3 No PSRAM (5323) + BNO085 (4754) via STEMMA QT, wired USB. The board is a USB game controller: axis 0 = yaw (±180°), axis 1 = pitch (±90°), Z = roll (unused), button 0 = BOOT = Zero. The BNO085 uses its game rotation vector (no magnetometer) at 100 Hz; I2C runs at 400 kHz and the sketch restarts the sensor if no data arrives for 1 s (the BNO085 sometimes drops off the ESP32-S3's I2C bus). Serial (115200) prints yaw / pitch / roll, data rate and restarts.
+
+Arduino IDE Tools: Board *Adafruit Feather ESP32-S3 No PSRAM*, USB Mode *USB-OTG (TinyUSB)*, USB CDC On Boot *Enabled*, USB DFU On Boot *Disabled*. Library *Adafruit BNO08x* (1.2.7), esp32 core 3.3.12. arduino-cli FQBN: `esp32:esp32:adafruit_feather_esp32s3_nopsram:USBMode=default,CDCOnBoot=cdc,DFUOnBoot=default`.
+
+`mv/sensor/` reads it with `shared/gamepad-input.js`: press the board's button once (browsers only reveal a gamepad after its first input); the first sight of the controller and every button press set the current orientation as the front. Yaw is unwrapped across ±180°. The mouse still works without a controller. URL options: `?flipyaw`, `?flippitch` (reverse a direction), `?yawaxis=`, `?pitchaxis=` (other axes). The debug overlay (`D` / `?debug`) shows the controller name, raw axes and button.
+
 A three.js viewer on GitHub Pages: turn a physical object (sensor station) or walk around a printed card (AR station), and the 3D model turns with it.
 
 ## Structure
