@@ -33,7 +33,7 @@
       tone-mapping="neutral"
       shadow-intensity="0"
       field-of-view="30deg"
-      camera-orbit="0deg 60deg 100%"
+      camera-orbit="0deg 45deg 100%"
       interaction-prompt="none">
     </model-viewer>
   </div>
@@ -54,7 +54,7 @@
     const FRONT_YAW_DEG = 90;  // turns the model so its front looks at the screen at rest (90 = the figure's face; the flower is nearly symmetric)
     const params = new URLSearchParams(location.search);
     let SMOOTH = +(params.get('smooth') ?? 12);   // slerp toward the target: 1 - exp(-SMOOTH * dt); 0 = no smoothing
-    const VIEW_ELEV_DEG = +(params.get('elev') ?? 30);   // camera this far above the model (degrees): you see it slightly from above
+    const VIEW_ELEV_DEG = +(params.get('elev') ?? 45);   // camera this far above the model (degrees): you see it slightly from above
     const CONTROLLER_FRONT = +(params.get('front') ?? 90); // which board side faces you at Zero (90 = tested with the bare board, 21 Nov)
 
     const mv = document.getElementById('mv');
