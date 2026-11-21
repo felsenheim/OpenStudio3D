@@ -11,10 +11,12 @@
 // C maps the sensor world (z up) to the screen (y up, z toward the viewer).
 // H removes the board's heading at Zero, so the board side that faced you at
 // Zero maps to the screen's "toward the viewer". Which board side that is
-// (0 / 90 / 180 / 270°) is the `front` option.
+// (0 / 90 / 180 / 270°) is the `front` option. The heading comes from the
+// board's x axis, or from its y axis (minus 90°) if x points up or down, so the
+// board can be mounted flat or upright (tilted 90° either way) with the same `front`.
 // Browsers only reveal a gamepad after its first input: press the button once.
 
-import { qMul, qConj, qNorm, qAxisAngle, qHeadingZ } from './quat.js?v=1';
+import { qMul, qConj, qNorm, qAxisAngle, qHeadingRobust } from './quat.js?v=2';
 
 const S3 = 1 / Math.sqrt(3);
 const C = qAxisAngle(S3, S3, S3, -120);   // world x→screen z, y→x, z→y
@@ -47,7 +49,7 @@ export function attachGamepadInput(station, {
 
   function zero() {
     q0 = state.q;
-    H = qAxisAngle(0, 0, 1, -(qHeadingZ(q0) + front));
+    H = qAxisAngle(0, 0, 1, -(qHeadingRobust(q0) + front));
   }
 
   function poll() {

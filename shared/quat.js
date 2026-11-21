@@ -51,3 +51,19 @@ export function qYawPitch([x, y, z, w]) {
     pitch: Math.atan2(fy, Math.hypot(fx, fz)) * 180 / Math.PI,
   };
 }
+
+// Rotate a vector by a quaternion
+export function qRotate([x, y, z, w], [vx, vy, vz]) {
+  const tx = 2 * (y * vz - z * vy), ty = 2 * (z * vx - x * vz), tz = 2 * (x * vy - y * vx);
+  return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)];
+}
+
+// Heading (degrees about z) of the body x axis, robust for any mounting:
+// if body x points (nearly) up or down, use body y instead (minus 90°),
+// so a board tilted 90° in either direction keeps the same heading.
+export function qHeadingRobust(q) {
+  const bx = qRotate(q, [1, 0, 0]);
+  if (Math.hypot(bx[0], bx[1]) >= 0.5) return Math.atan2(bx[1], bx[0]) * 180 / Math.PI;
+  const by = qRotate(q, [0, 1, 0]);
+  return Math.atan2(by[1], by[0]) * 180 / Math.PI - 90;
+}
