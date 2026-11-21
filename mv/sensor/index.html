@@ -33,7 +33,7 @@
       tone-mapping="neutral"
       shadow-intensity="0"
       field-of-view="30deg"
-      camera-orbit="0deg 90deg 100%"
+      camera-orbit="0deg 60deg 100%"
       interaction-prompt="none">
     </model-viewer>
   </div>
@@ -54,6 +54,8 @@
     const FRONT_YAW_DEG = 90;  // turns the model so its front looks at the screen at rest (90 = the figure's face; the flower is nearly symmetric)
     const params = new URLSearchParams(location.search);
     let SMOOTH = +(params.get('smooth') ?? 12);   // slerp toward the target: 1 - exp(-SMOOTH * dt); 0 = no smoothing
+    const VIEW_ELEV_DEG = +(params.get('elev') ?? 30);   // camera this far above the model (degrees): you see it slightly from above
+    const CONTROLLER_FRONT = +(params.get('front') ?? 90); // which board side faces you at Zero (90 = tested with the bare board, 21 Nov)
 
     const mv = document.getElementById('mv');
     const status = document.getElementById('status');
@@ -88,7 +90,7 @@
         pivotScene.queueRender();
       } else {                              // fallback: camera orbit (yaw / pitch only)
         const { yaw, pitch } = qYawPitch(q);
-        mv.cameraOrbit = `${-(yaw + FRONT_YAW_DEG)}deg ${Math.max(0, Math.min(180, 90 + pitch))}deg 100%`;
+        mv.cameraOrbit = `${-(yaw + FRONT_YAW_DEG)}deg ${Math.max(0, Math.min(180, 90 - VIEW_ELEV_DEG + pitch))}deg 100%`;
       }
     }
 
@@ -96,7 +98,8 @@
     attachMouseInput(mv, station);
 
     // Game controller (firmware/tangible_controller): full orientation as a quaternion.
-    // URL option ?front=0|90|180|270: which side of the board faces you when you press Zero.
+    // URL options: ?front=0|90|180|270 (which side of the board faces you at Zero, default 90),
+    //              ?elev=30 (camera height above the model in degrees; 0 = exactly from the side)
     let modelLoaded = false, padConnected = false;
     const showHint = () => {
       if (!modelLoaded) return;
@@ -106,7 +109,7 @@
       if (padConnected) setTimeout(() => { if (padConnected) status.style.display = 'none'; }, 2000);
     };
     const pad = attachGamepadInput(station, {
-      front: +(params.get('front') ?? 0),
+      front: CONTROLLER_FRONT,
       axes: (params.get('qaxes') ?? '0,1,2').split(',').map(Number),
       onStatus: (s) => { padConnected = s === 'connected'; showHint(); },
     });
@@ -117,6 +120,7 @@
       const p = e.detail.totalProgress;
       if (p < 1) status.textContent = `Loading model… ${Math.round(p * 100)}%`;
     });
+    mv.cameraOrbit = `0deg ${90 - VIEW_ELEV_DEG}deg 100%`;
     mv.addEventListener('load', () => { modelLoaded = true; pivotScene = findScene(); showHint(); });
     mv.addEventListener('error', (e) => {
       status.textContent = 'Could not load the model.';
